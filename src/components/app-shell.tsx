@@ -44,7 +44,7 @@ export function AppShell({ user, children }: { user: User; children: ReactNode }
   const signOut = async () => { await fetch("/api/auth/logout", { method: "POST" }); router.replace("/login"); router.refresh(); };
   const isActive = (href: string) => href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  return <div className="relative z-10 min-h-dvh">
+  return <div className="themed relative z-10 min-h-dvh">
     <Splash />
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col border-r border-line bg-paper/80 backdrop-blur-xl md:flex">
       <div className="flex items-center gap-2.5 px-5 pt-6 pb-7"><Logo /><div><div className="font-display text-[17px] font-semibold tracking-[-0.02em] leading-none">Quill</div><div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-faint">trade & life</div></div></div>
