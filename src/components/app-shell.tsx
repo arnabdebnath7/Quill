@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BarChart3, CalendarDays, CandlestickChart, Feather, LayoutDashboard, LogOut, Monitor, Moon, PieChart, Settings, Star, Sun } from "lucide-react";
+import { BarChart3, Brain, CalendarDays, CandlestickChart, Feather, LayoutDashboard, LogOut, Monitor, Moon, PieChart, Settings, Star, Sun } from "lucide-react";
 import { useTheme } from "@/components/providers";
 import { Splash } from "@/components/splash";
 import { avatarHue, cn, initials } from "@/lib/utils";
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/journal/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/insights", label: "Insights", icon: PieChart },
+  { href: "/intelligence", label: "Intelligence", icon: Brain },
   { href: "/performance", label: "Performance", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -41,6 +42,6 @@ export function AppShell({ user, children }: { user: User; children: ReactNode }
     </aside>
     <header className="sticky top-0 z-40 flex items-center justify-between border-b border-line bg-paper/85 px-4 py-2.5 backdrop-blur-xl md:hidden"><Link href="/today" className="flex items-center gap-2"><Logo size={28}/><span className="font-display text-[16px] font-semibold tracking-[-0.02em]">Quill</span></Link><div className="flex items-center gap-1.5"><ThemeToggle/><motion.button whileTap={{ scale: .88, rotate: 5 }} onClick={signOut} aria-label="Sign out" className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-sub hover:text-ink cursor-pointer"><LogOut className="h-4 w-4"/></motion.button></div></header>
     <main className="px-4 pb-28 pt-6 sm:px-6 md:ml-[248px] md:px-10 md:pt-8 md:pb-12"><motion.div key={pathname} initial={{ opacity: 0, y: 8, scale: .995 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: .28, ease: [0.22,1,0.36,1] }} className="mx-auto w-full max-w-6xl">{children}</motion.div></main>
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Mobile navigation"><div className="grid grid-cols-3 sm:grid-cols-5">{NAV.slice(0,5).map((item) => { const active = isActive(item.href); return <Link key={item.href} href={item.href} className="relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 py-2"><span className="sr-only">{item.label}</span>{active && <motion.span layoutId="mnav-pill" className="absolute -top-px h-0.5 w-7 rounded-full bg-brand" transition={{ type:"spring", bounce:.2, duration:.5 }}/>}<motion.span whileTap={{ scale: .78 }} animate={active ? { y: -1 } : { y: 0 }} className="flex"><item.icon className={cn("h-[18px] w-[18px]",active?"text-brand":"text-faint")} strokeWidth={active?2.2:1.9}/></motion.span><span className={cn("truncate max-w-full px-0.5 text-[8.5px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>; })}</div></nav>
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Mobile navigation"><div className="grid grid-cols-5">{NAV.slice(0,5).map((item) => { const active = isActive(item.href); return <Link key={item.href} href={item.href} className="relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 py-2"><span className="sr-only">{item.label}</span>{active && <motion.span layoutId="mnav-pill" className="absolute -top-px h-0.5 w-7 rounded-full bg-brand" transition={{ type:"spring", bounce:.2, duration:.5 }}/>}<motion.span whileTap={{ scale: .78 }} animate={active ? { y: -1 } : { y: 0 }} className="flex"><item.icon className={cn("h-[18px] w-[18px]",active?"text-brand":"text-faint")} strokeWidth={active?2.2:1.9}/></motion.span><span className={cn("truncate max-w-full px-0.5 text-[8.5px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>; })}</div></nav>
   </div>;
 }
