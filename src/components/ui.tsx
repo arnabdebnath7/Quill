@@ -1,0 +1,273 @@
+"use client";
+
+import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+/* ---------------- Button ---------------- */
+type ButtonVariant = "primary" | "ghost" | "outline" | "soft" | "danger" | "success";
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading,
+  className,
+  children,
+  disabled,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: "sm" | "md" | "lg" | "icon";
+  loading?: boolean;
+}) {
+  const styles: Record<ButtonVariant, string> = {
+    primary:
+      "bg-brandsolid text-brandon hover:opacity-90 shadow-[0_1px_2px_rgba(0,0,0,0.2)] active:scale-[0.98]",
+    ghost: "hover:bg-line/60 text-sub hover:text-ink",
+    outline: "border border-linestrong bg-transparent hover:bg-line/40 active:scale-[0.98]",
+    soft: "bg-line/50 hover:bg-line active:scale-[0.98]",
+    danger: "bg-down-soft text-down hover:bg-down/20 active:scale-[0.98]",
+    success: "bg-up-soft text-up hover:bg-up/20 active:scale-[0.98]",
+  };
+  const sizes = {
+    sm: "h-8 px-3 text-[13px] rounded-lg gap-1.5",
+    md: "h-10 px-4 text-sm rounded-xl gap-2",
+    lg: "h-12 px-6 text-[15px] rounded-xl gap-2",
+    icon: "h-9 w-9 rounded-lg",
+  };
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center justify-center font-medium tracking-[-0.01em] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer select-none",
+        styles[variant],
+        sizes[size],
+        className
+      )}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {children}
+    </button>
+  );
+}
+
+/* ---------------- Card ---------------- */
+export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("rounded-2xl border border-line bg-card shadow-[var(--shadow)]", className)}
+      {...props}
+    />
+  );
+}
+
+/* ---------------- Inputs ---------------- */
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  function Input({ className, ...props }, ref) {
+    return (
+      <input
+        ref={ref}
+        className={cn(
+          "h-10 w-full rounded-xl border border-line bg-paper2/60 px-3.5 text-sm outline-none placeholder:text-faint",
+          "focus:border-linestrong focus:ring-2 focus:ring-ring2/20 transition-all tabular",
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className, ...props }, ref) {
+    return (
+      <textarea
+        ref={ref}
+        className={cn(
+          "w-full rounded-xl border border-line bg-paper2/60 px-3.5 py-3 text-sm outline-none placeholder:text-faint leading-relaxed",
+          "focus:border-linestrong focus:ring-2 focus:ring-ring2/20 transition-all",
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+
+export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
+  function Select({ className, children, ...props }, ref) {
+    return (
+      <select
+        ref={ref}
+        className={cn(
+          "h-10 w-full appearance-none rounded-xl border border-line bg-paper2/60 px-3.5 pr-8 text-sm outline-none cursor-pointer",
+          "focus:border-linestrong focus:ring-2 focus:ring-ring2/20 transition-all",
+          "bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23999%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </select>
+    );
+  }
+);
+
+export function Field({ label, children, className, hint }: { label: string; children: ReactNode; className?: string; hint?: string }) {
+  return (
+    <label className={cn("grid gap-1.5", className)}>
+      <span className="text-[12px] font-medium text-sub tracking-wide uppercase">{label}</span>
+      {children}
+      {hint && <span className="text-[11px] text-faint">{hint}</span>}
+    </label>
+  );
+}
+
+/* ---------------- Badge / chips ---------------- */
+export function Badge({
+  tone = "neutral",
+  className,
+  children,
+}: {
+  tone?: "neutral" | "up" | "down" | "brand";
+  className?: string;
+  children: ReactNode;
+}) {
+  const tones = {
+    neutral: "bg-line/50 text-sub",
+    up: "bg-up-soft text-up",
+    down: "bg-down-soft text-down",
+    brand: "bg-brand-soft text-brand",
+  };
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", tones[tone], className)}>
+      {children}
+    </span>
+  );
+}
+
+/* ---------------- Segmented control ---------------- */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  size = "md",
+}: {
+  options: { value: T; label: ReactNode }[];
+  value: T;
+  onChange: (v: T) => void;
+  size?: "sm" | "md";
+}) {
+  return (
+    <div className={cn("inline-flex items-center rounded-xl border border-line bg-paper2/70 p-1", size === "sm" && "rounded-lg p-0.5")}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "relative rounded-lg px-3 text-[13px] font-medium text-sub transition-colors cursor-pointer hover:text-ink",
+            size === "sm" ? "h-7 text-xs" : "h-8",
+            value === o.value && "text-ink"
+          )}
+        >
+          {value === o.value && (
+            <motion.span
+              layoutId={undefined}
+              className="absolute inset-0 rounded-lg bg-card shadow-sm border border-line"
+              transition={{ type: "spring", bounce: 0.18, duration: 0.45 }}
+            />
+          )}
+          <span className="relative z-10 inline-flex items-center gap-1">{o.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- Dialog ---------------- */
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  wide,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[6px]" onClick={onClose} />
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ type: "spring", bounce: 0.12, duration: 0.4 }}
+            className={cn(
+              "relative w-full rounded-t-3xl sm:rounded-2xl border border-line bg-card shadow-2xl max-h-[92vh] overflow-y-auto",
+              wide ? "sm:max-w-2xl" : "sm:max-w-lg"
+            )}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-card/90 backdrop-blur px-5 py-4 rounded-t-2xl">
+              <div className="font-display text-[15px] font-semibold tracking-[-0.01em]">{title}</div>
+              <button
+                onClick={onClose}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sub hover:bg-line/60 hover:text-ink transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5">{children}</div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ---------------- Skeleton ---------------- */
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("shimmer rounded-lg bg-line/40", className)} />;
+}
+
+/* ---------------- Empty state ---------------- */
+export function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  body: string;
+  action?: ReactNode;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-linestrong px-6 py-14 text-center"
+    >
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+        {icon}
+      </div>
+      <div className="font-display text-[15px] font-semibold">{title}</div>
+      <p className="mt-1.5 max-w-[300px] text-[13px] leading-relaxed text-sub">{body}</p>
+      {action && <div className="mt-5">{action}</div>}
+    </motion.div>
+  );
+}

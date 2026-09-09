@@ -1,0 +1,12 @@
+{
+  "appId": "app.quilljournal.quill",
+  "appName": "Quill",
+  "webDir": "out",
+  "server": {
+    "url": "https://3000-ibgy4msscwfu0kt60sx3a.e2b.app",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
