@@ -17,8 +17,8 @@ const MOOD_META: Record<Mood, { label: string; dot: string; tone: string }> = {
   rough: { label: "Rough", dot: "bg-down", tone: "text-down" },
 };
 function localToday() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-type CalendarCell = Date | null;
 
+type CalendarCell = Date | null;
 export default function JournalCalendarPage() {
   const [month, setMonth] = useState(localToday());
   const [selected, setSelected] = useState(localToday());
@@ -27,12 +27,8 @@ export default function JournalCalendarPage() {
   const monthEnd = endOfMonth(month);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const leading = monthStart.getDay();
-  const padded: CalendarCell[] = [...Array.from<CalendarCell>({ length: leading }, () => null), ...days];
-  const entryMap = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof entries>>();
-    for (const entry of entries ?? []) { const key = entry.date; const list = map.get(key) ?? []; list.push(entry); map.set(key, list); }
-    return map;
-  }, [entries]);
+  const padded: CalendarCell[] = [...(Array.from({ length: leading }, () => null) as CalendarCell[]), ...days];
+  const entryMap = useMemo(() => { const map = new Map<string, NonNullable<typeof entries>>(); for (const entry of entries ?? []) { const key = entry.date; const list = map.get(key) ?? []; list.push(entry); map.set(key, list); } return map; }, [entries]);
   const selectedKey = format(selected, "yyyy-MM-dd");
   const selectedEntries = entryMap.get(selectedKey) ?? [];
   const onThisDay = useMemo(() => { const mm = format(selected, "MM-dd"); return (entries ?? []).filter((e) => e.date.slice(5) === mm).sort((a, b) => b.date.localeCompare(a.date)); }, [entries, selected]);
