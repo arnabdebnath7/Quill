@@ -66,7 +66,8 @@ export type CheckinPayload = {
   reflection: string;
 };
 export function useTodayCheckin(date: string) { return useQuery({ queryKey: ["checkin", date], queryFn: () => api<{ checkin: DailyCheckin | null }>(`/api/checkin?date=${encodeURIComponent(date)}`).then((r) => r.checkin), staleTime: 60_000 }); }
-export function useSaveCheckin() { const qc = useQueryClient(); return useMutation({ mutationFn: (payload: CheckinPayload) => api<{ checkin: DailyCheckin }>("/api/checkin", { method: "PUT", body: JSON.stringify(payload) }).then((r) => r.checkin), onSuccess: (checkin) => { qc.setQueryData(["checkin", checkin.date], checkin); toast.success("Today saved"); }, onError: (e) => toast.error(e.message) }); }
+export function useCheckinHistory(from: string, to: string) { return useQuery({ queryKey: ["checkin-history", from, to], queryFn: () => api<{ checkins: DailyCheckin[] }>(`/api/checkin?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then((r) => r.checkins), staleTime: 60_000 }); }
+export function useSaveCheckin() { const qc = useQueryClient(); return useMutation({ mutationFn: (payload: CheckinPayload) => api<{ checkin: DailyCheckin }>("/api/checkin", { method: "PUT", body: JSON.stringify(payload) }).then((r) => r.checkin), onSuccess: (checkin) => { qc.setQueryData(["checkin", checkin.date], checkin); qc.invalidateQueries({ queryKey: ["checkin-history"] }); toast.success("Today saved"); }, onError: (e) => toast.error(e.message) }); }
 
 /* ---------------- Live quotes (polling) ---------------- */
 export type QuotesMap = Record<string, Quote>;
