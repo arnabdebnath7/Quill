@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { dailyCheckins } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lte, asc } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
@@ -19,10 +19,33 @@ const schema = z.object({
 export async function GET(req: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const date = new URL(req.url).searchParams.get("date");
-  if (!date) return NextResponse.json({ error: "Date is required" }, { status: 400 });
-  const [row] = await db.select().from(dailyCheckins).where(and(eq(dailyCheckins.userId, user.id), eq(dailyCheckins.date, date))).limit(1);
-  return NextResponse.json({ checkin: row ?? null });
+
+  const params = new URL(req.url).searchParams;
+  const date = params.get("date");
+  const from = params.get("from");
+  const to = params.get("to");
+
+  if (date) {
+    const [row] = await db
+      .select()
+      .from(dailyCheckins)
+      .where(and(eq(dailyCheckins.userId, user.id), eq(dailyCheckins.date, date)))
+      .limit(1);
+    return NextResponse.json({ checkin: row ?? null });
+  }
+
+  if (from || to) {
+    if ((from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) || (to && !/^\d{4}-\d{2}-\d{2}$/.test(to))) {
+      return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
+    }
+    const conditions = [eq(dailyCheckins.userId, user.id)];
+    if (from) conditions.push(gte(dailyCheckins.date, from));
+    if (to) conditions.push(lte(dailyCheckins.date, to));
+    const rows = await db.select().from(dailyCheckins).where(and(...conditions)).orderBy(asc(dailyCheckins.date));
+    return NextResponse.json({ checkins: rows });
+  }
+
+  return NextResponse.json({ error: "Date or date range is required" }, { status: 400 });
 }
 
 export async function PUT(req: Request) {
