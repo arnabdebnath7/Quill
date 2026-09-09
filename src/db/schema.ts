@@ -36,6 +36,13 @@ export const trades = pgTable("trades", {
   mood: text("mood"),
   rating: integer("rating"),
   tags: text("tags").array().notNull().default([]),
+  riskAmount: numeric("risk_amount", { precision: 20, scale: 6 }),
+  preTradePlan: text("pre_trade_plan").notNull().default(""),
+  entryReason: text("entry_reason").notNull().default(""),
+  exitReason: text("exit_reason").notNull().default(""),
+  mistake: text("mistake").notNull().default(""),
+  lesson: text("lesson").notNull().default(""),
+  rulesFollowed: boolean("rules_followed"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
