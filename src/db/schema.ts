@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, numeric, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, numeric, integer, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -20,9 +20,9 @@ export const trades = pgTable("trades", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: text("symbol").notNull(),
   name: text("name"),
-  market: text("market").notNull(), // us | india | forex | crypto | gold
-  side: text("side").notNull().default("long"), // long | short
-  status: text("status").notNull().default("open"), // open | closed
+  market: text("market").notNull(),
+  side: text("side").notNull().default("long"),
+  status: text("status").notNull().default("open"),
   quantity: numeric("quantity", { precision: 28, scale: 8 }).notNull(),
   entryPrice: numeric("entry_price", { precision: 28, scale: 8 }).notNull(),
   exitPrice: numeric("exit_price", { precision: 28, scale: 8 }),
@@ -33,8 +33,8 @@ export const trades = pgTable("trades", {
   target: numeric("target", { precision: 28, scale: 8 }),
   setup: text("setup"),
   notes: text("notes"),
-  mood: text("mood"), // great | good | neutral | low | rough
-  rating: integer("rating"), // 1-5 self grade
+  mood: text("mood"),
+  rating: integer("rating"),
   tags: text("tags").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -46,7 +46,7 @@ export const journalEntries = pgTable("journal_entries", {
   title: text("title").notNull(),
   content: text("content").notNull().default(""),
   mood: text("mood"),
-  date: text("date").notNull(), // yyyy-mm-dd
+  date: text("date").notNull(),
   tags: text("tags").array().notNull().default([]),
   pinned: boolean("pinned").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -62,7 +62,23 @@ export const watchlist = pgTable("watchlist", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const dailyCheckins = pgTable("daily_checkins", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  mood: text("mood"),
+  energy: integer("energy"),
+  focus: integer("focus"),
+  sleepHours: numeric("sleep_hours", { precision: 4, scale: 1 }),
+  intention: text("intention").notNull().default(""),
+  tradingPlan: text("trading_plan").notNull().default(""),
+  reflection: text("reflection").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ dateUserUnique: uniqueIndex("daily_checkins_user_date_idx").on(table.userId, table.date) }));
+
 export type User = typeof users.$inferSelect;
 export type Trade = typeof trades.$inferSelect;
 export type JournalEntry = typeof journalEntries.$inferSelect;
 export type WatchlistItem = typeof watchlist.$inferSelect;
+export type DailyCheckin = typeof dailyCheckins.$inferSelect;
