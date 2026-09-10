@@ -77,17 +77,16 @@ function validateRelease(output: QuillCoachOutput, intelligence: IntelligenceRes
     ),
   );
 
-  const validEvidenceIds = output.evidenceIds.filter((id) => allowedIds.has(id));
+  const hasUnsupportedEvidenceIds = output.evidenceIds.some((id) => !allowedIds.has(id));
   const combinedText = [output.headline, output.summary, ...output.actions].join(" ");
   const containsForecastLanguage = FORECAST_PATTERNS.some((pattern) => pattern.test(combinedText));
 
-  if (containsForecastLanguage) {
+  if (hasUnsupportedEvidenceIds || containsForecastLanguage) {
     return null;
   }
 
   return {
     ...output,
-    evidenceIds: validEvidenceIds,
     safetyNote: output.safetyNote || "Observed evidence only; this is not a forecast or trade recommendation.",
   } satisfies QuillCoachOutput;
 }
