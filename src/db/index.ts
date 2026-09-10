@@ -11,10 +11,26 @@ const globalForDb = globalThis as typeof globalThis & {
   __arenaNextJsPostgresqlPool?: Pool;
 };
 
+const connectionString = (() => {
+  try {
+    const url = new URL(databaseUrl);
+    const sslmode = url.searchParams.get("sslmode");
+
+    if (sslmode === "prefer" || sslmode === "require" || sslmode === "verify-ca") {
+      url.searchParams.set("sslmode", "verify-full");
+      return url.toString();
+    }
+  } catch {
+    // Keep the original value so pg can surface a useful connection error.
+  }
+
+  return databaseUrl;
+})();
+
 export const pool =
   globalForDb.__arenaNextJsPostgresqlPool ??
   new Pool({
-    connectionString: databaseUrl,
+    connectionString,
   });
 
 if (process.env.NODE_ENV !== "production") {
