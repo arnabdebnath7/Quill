@@ -48,7 +48,7 @@ function friendlyError(e: unknown): string {
 
 export function LoginClient() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "google" | "exchange" | "redirecting">("idle");
+  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange" | "redirecting">("idle");
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== "idle";
 
@@ -70,7 +70,6 @@ export function LoginClient() {
     [router]
   );
 
-  // Complete a redirect flow if Google just sent us back here.
   useEffect(() => {
     let dead = false;
     consumeRedirectResult()
@@ -107,12 +106,29 @@ export function LoginClient() {
     }
   };
 
+  const enterAsGuest = async () => {
+    setError(null);
+    setPhase("guest");
+    try {
+      const res = await fetch("/api/auth/guest", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Guest access failed. Please try again.");
+      router.replace("/");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Guest access failed. Please try again.");
+      setPhase("idle");
+    }
+  };
+
   const label =
     phase === "google"
       ? "Waiting for Google…"
       : phase === "exchange"
         ? "Opening your journal…"
-        : "Continue with Google";
+        : phase === "guest"
+          ? "Opening guest journal…"
+          : "Continue with Google";
 
   return (
     <div className="relative z-10 flex min-h-dvh flex-col">
@@ -170,6 +186,15 @@ export function LoginClient() {
             )}
             {label}
           </button>
+
+          <button
+            onClick={enterAsGuest}
+            disabled={busy}
+            className="h-11 w-full rounded-full border border-line bg-transparent px-4 text-[13.5px] font-medium text-sub transition-colors hover:bg-card hover:text-ink active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+          >
+            Enter without an account
+          </button>
+
           {error && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
@@ -180,7 +205,7 @@ export function LoginClient() {
             </motion.p>
           )}
           <p className="text-center text-[11.5px] leading-relaxed text-faint">
-            Secured by Firebase Auth · We only ever see your name, email and photo.
+            Google keeps your account synced. Guest mode creates a private demo journal on this device.
           </p>
         </motion.div>
 
