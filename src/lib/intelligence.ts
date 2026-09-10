@@ -12,7 +12,16 @@ export type IntelligenceEvidence = {
   strength?: EvidenceStrength;
 };
 
+export type IntelligenceEvidencePoint = {
+  id: string;
+  label: string;
+  value: string;
+  detail: string;
+  date: string;
+};
+
 export type IntelligenceCorrelation = {
+  id: string;
   label: string;
   headline: string;
   detail: string;
@@ -21,6 +30,7 @@ export type IntelligenceCorrelation = {
   sampleSize: number;
   tone: SignalTone;
   strength: EvidenceStrength;
+  evidence: IntelligenceEvidencePoint[];
 };
 
 export type IntelligenceResult = {
@@ -51,6 +61,20 @@ function pct(value: number | null) {
   return value == null ? "—" : `${Math.round(value)}%`;
 }
 
+function asDate(value: Date | string | number) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function localDateKey(value: Date | string | number) {
+  const date = asDate(value);
+  if (!date) return null;
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function readinessFromCheckin(checkin: DailyCheckin | null) {
   if (!checkin) return { score: null, label: "No check-in yet", mood: null, energy: null, focus: null, sleepHours: null };
   const energy = checkin.energy ?? null;
@@ -62,25 +86,30 @@ function readinessFromCheckin(checkin: DailyCheckin | null) {
   return { score, label, mood: checkin.mood, energy, focus, sleepHours };
 }
 
-function localDateKey(value: Date | string | number) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return null;
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function evidenceStrength(sampleSize: number): EvidenceStrength {
   if (sampleSize >= 8) return "useful";
   if (sampleSize >= 4) return "emerging";
   return "insufficient";
 }
 
+function correlationId(label: string) {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function pointForTrade(trade: Trade, detail: string, value: string): IntelligenceEvidencePoint {
+  return {
+    id: trade.id,
+    label: trade.symbol,
+    value,
+    detail,
+    date: localDateKey(trade.entryAt) ?? "unknown",
+  };
+}
+
 function splitMetricEvidence(
   label: string,
   metricLabel: string,
-  rows: Array<{ metric: number; pnl: number }>,
+  rows: Array<{ metric: number; pnl: number; trade: Trade }>,
 ): IntelligenceCorrelation | null {
   if (rows.length < 8) return null;
   const sorted = [...rows].sort((a, b) => a.metric - b.metric);
@@ -91,31 +120,45 @@ function splitMetricEvidence(
 
   const lowAvg = average(low.map((row) => row.pnl)) ?? 0;
   const highAvg = average(high.map((row) => row.pnl)) ?? 0;
-  const winner = highAvg >= lowAvg ? { high: highAvg, low: lowAvg } : { high: lowAvg, low: highAvg };
   const direction = highAvg >= lowAvg ? "higher" : "lower";
+  const highValue = highAvg >= lowAvg ? highAvg : lowAvg;
+  const lowValue = highAvg >= lowAvg ? lowAvg : highAvg;
   const difference = Math.abs(highAvg - lowAvg);
-  const tone: SignalTone = direction === "higher" ? "positive" : "caution";
+  const tone: SignalTone = highAvg === lowAvg ? "neutral" : highAvg > lowAvg ? "positive" : "caution";
+
+  const highPoints = [...(highAvg >= lowAvg ? high : low)]
+    .slice()
+    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
+    .slice(0, 4)
+    .map((row) => pointForTrade(row.trade, `${metricLabel}: ${row.metric.toFixed(1)} · P&L ${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`, row.metric.toFixed(1)));
+  const lowPoints = [...(highAvg >= lowAvg ? low : high)]
+    .slice()
+    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
+    .slice(0, 4)
+    .map((row) => pointForTrade(row.trade, `${metricLabel}: ${row.metric.toFixed(1)} · P&L ${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`, row.metric.toFixed(1)));
 
   return {
+    id: correlationId(label),
     label,
     headline: `${metricLabel} lines up with ${direction} average P&L`,
-    detail: `${high.length} trades above the midpoint averaged ${winner.high >= 0 ? "+" : ""}${winner.high.toFixed(2)}, versus ${low.length} at or below it averaging ${winner.low >= 0 ? "+" : ""}${winner.low.toFixed(2)}. Difference: ${difference.toFixed(2)}.`,
+    detail: `${high.length} trades above the midpoint averaged ${highValue >= 0 ? "+" : ""}${highValue.toFixed(2)}, versus ${low.length} at or below it averaging ${lowValue >= 0 ? "+" : ""}${lowValue.toFixed(2)}. Difference: ${difference.toFixed(2)}.`,
     higher: `${metricLabel} above ${Number(midpoint.toFixed(1))}`,
     lower: `${metricLabel} at or below ${Number(midpoint.toFixed(1))}`,
     sampleSize: rows.length,
     tone,
     strength: evidenceStrength(rows.length),
+    evidence: [...highPoints, ...lowPoints],
   };
 }
 
 function setupEvidence(closed: Array<{ trade: Trade; pnl: number }>): IntelligenceEvidence[] {
   const bySetup = new Map<string, { pnl: number; count: number; wins: number }>();
-  for (const x of closed) {
-    const key = x.trade.setup?.trim() || "Unspecified setup";
+  for (const { trade, pnl } of closed) {
+    const key = trade.setup?.trim() || "Unspecified setup";
     const row = bySetup.get(key) ?? { pnl: 0, count: 0, wins: 0 };
-    row.pnl += x.pnl;
+    row.pnl += pnl;
     row.count += 1;
-    if (x.pnl > 0) row.wins += 1;
+    if (pnl > 0) row.wins += 1;
     bySetup.set(key, row);
   }
 
@@ -145,10 +188,13 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
   const closed = input.trades
     .map((trade) => ({ trade, pnl: pnlOfTrade(trade) }))
     .filter((x): x is { trade: Trade; pnl: number } => x.pnl != null && x.trade.status === "closed");
-  const recent = closed.filter(({ trade }) => new Date(trade.exitAt ?? trade.entryAt) >= recentCutoff);
+  const recent = closed.filter(({ trade }) => {
+    const date = asDate(trade.exitAt ?? trade.entryAt);
+    return date ? date >= recentCutoff : false;
+  });
   const previous = closed.filter(({ trade }) => {
-    const date = new Date(trade.exitAt ?? trade.entryAt);
-    return date >= prevCutoff && date < recentCutoff;
+    const date = asDate(trade.exitAt ?? trade.entryAt);
+    return date ? date >= prevCutoff && date < recentCutoff : false;
   });
   const recentPnl = recent.reduce((sum, x) => sum + x.pnl, 0);
   const previousPnl = previous.reduce((sum, x) => sum + x.pnl, 0);
@@ -161,7 +207,7 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
   const stateRows = closed.flatMap(({ trade, pnl }) => {
     const key = localDateKey(trade.entryAt);
     const checkin = key ? checkinsByDate.get(key) : undefined;
-    return checkin ? [{ checkin, pnl }] : [];
+    return checkin ? [{ checkin, pnl, trade }] : [];
   });
 
   const correlations: IntelligenceCorrelation[] = [];
@@ -169,37 +215,46 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
     if (value && value.strength !== "insufficient") correlations.push(value);
   };
 
-  pushCorrelation(splitMetricEvidence("Sleep × performance", "Sleep hours", stateRows.flatMap(({ checkin, pnl }) => {
+  pushCorrelation(splitMetricEvidence("Sleep × performance", "Sleep hours", stateRows.flatMap(({ checkin, pnl, trade }) => {
     const metric = checkin.sleepHours == null ? null : Number(checkin.sleepHours);
-    return metric != null && Number.isFinite(metric) ? [{ metric, pnl }] : [];
+    return metric != null && Number.isFinite(metric) ? [{ metric, pnl, trade }] : [];
   })));
-  pushCorrelation(splitMetricEvidence("Energy × performance", "Energy", stateRows.flatMap(({ checkin, pnl }) => checkin.energy == null ? [] : [{ metric: checkin.energy, pnl }])));
-  pushCorrelation(splitMetricEvidence("Focus × performance", "Focus", stateRows.flatMap(({ checkin, pnl }) => checkin.focus == null ? [] : [{ metric: checkin.focus, pnl }])));
+  pushCorrelation(splitMetricEvidence("Energy × performance", "Energy", stateRows.flatMap(({ checkin, pnl, trade }) => checkin.energy == null ? [] : [{ metric: checkin.energy, pnl, trade }])));
+  pushCorrelation(splitMetricEvidence("Focus × performance", "Focus", stateRows.flatMap(({ checkin, pnl, trade }) => checkin.focus == null ? [] : [{ metric: checkin.focus, pnl, trade }])));
 
-  const ratingRows = closed.flatMap(({ trade, pnl }) => trade.rating == null ? [] : [{ metric: trade.rating, pnl }]);
+  const ratingRows = closed.flatMap(({ trade, pnl }) => trade.rating == null ? [] : [{ metric: trade.rating, pnl, trade }]);
   pushCorrelation(splitMetricEvidence("Trade rating × outcome", "Trade rating", ratingRows));
 
-  const weekday = new Map<number, { pnl: number; count: number }>();
+  const weekday = new Map<number, { pnl: number; count: number; trades: Trade[] }>();
   for (const { trade, pnl } of closed) {
-    const day = new Date(trade.entryAt).getDay();
-    const row = weekday.get(day) ?? { pnl: 0, count: 0 };
+    const date = asDate(trade.entryAt);
+    if (!date) continue;
+    const day = date.getDay();
+    const row = weekday.get(day) ?? { pnl: 0, count: 0, trades: [] };
     row.pnl += pnl;
     row.count += 1;
+    row.trades.push(trade);
     weekday.set(day, row);
   }
-  const bestWeekday = [...weekday.entries()].filter(([, v]) => v.count >= 3).sort((a, b) => b[1].pnl - a[1].pnl)[0];
+  const bestWeekday = [...weekday.entries()].filter(([, v]) => v.count >= 3).sort((a, b) => b[1].pnl / b[1].count - a[1].pnl / a[1].count)[0];
   if (bestWeekday) {
     const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const avg = bestWeekday[1].pnl / bestWeekday[1].count;
     correlations.push({
+      id: "day-of-week",
       label: "Day-of-week pattern",
-      headline: `${names[bestWeekday[0]]} is the strongest documented trading day`,
+      headline: `${names[bestWeekday[0]]} has the strongest documented average P&L`,
       detail: `${bestWeekday[1].count} trades on ${names[bestWeekday[0]]} averaged ${avg >= 0 ? "+" : ""}${avg.toFixed(2)} P&L.`,
       higher: names[bestWeekday[0]],
       lower: "Other weekdays",
       sampleSize: bestWeekday[1].count,
-      tone: avg >= 0 ? "positive" : "caution",
+      tone: avg > 0 ? "positive" : avg < 0 ? "caution" : "neutral",
       strength: evidenceStrength(bestWeekday[1].count),
+      evidence: bestWeekday[1].trades
+        .slice()
+        .sort((a, b) => String(a.entryAt).localeCompare(String(b.entryAt)))
+        .slice(0, 6)
+        .map((trade) => pointForTrade(trade, "Trade contributing to this weekday sample", localDateKey(trade.entryAt) ?? "unknown")),
     });
   }
 
@@ -287,7 +342,10 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
     strength: evidenceStrength(recent.length),
   });
 
-  correlations.sort((a, b) => b.sampleSize - a.sampleSize);
+  correlations.sort((a, b) => {
+    const weight = { useful: 3, emerging: 2, insufficient: 0 };
+    return weight[b.strength] - weight[a.strength] || b.sampleSize - a.sampleSize;
+  });
 
   const nextActions: string[] = [];
   if (readiness.score != null && readiness.score < 60) nextActions.push("Run the Today check-in before opening a new position.");
@@ -312,7 +370,10 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
       winRate,
       previousPnl,
       deltaPnl: recent.length && previous.length ? recentPnl - previousPnl : null,
-      journalEntries: input.journals.filter((j) => new Date(j.createdAt) >= recentCutoff).length,
+      journalEntries: input.journals.filter((j) => {
+        const createdAt = asDate(j.createdAt);
+        return createdAt ? createdAt >= recentCutoff : false;
+      }).length,
     },
     observations,
     edge,
