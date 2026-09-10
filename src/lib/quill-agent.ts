@@ -101,26 +101,34 @@ export async function runQuillCoach(intelligence: IntelligenceResult, question?:
   }
 
   const userPrompt = `Analyze this Quill intelligence packet.\n\n${JSON.stringify(compactPacket(intelligence))}\n\nUser question: ${question?.trim() || "What is the most useful thing to review right now?"}`;
-  const result = await run(agent, userPrompt, { maxTurns: 2 });
-  const parsed = CoachOutput.safeParse(result.finalOutput);
 
-  if (!parsed.success) {
+  try {
+    const result = await run(agent, userPrompt, { maxTurns: 2 });
+    const parsed = CoachOutput.safeParse(result.finalOutput);
+
+    if (!parsed.success) {
+      return {
+        status: "blocked" as const,
+        reason: "The AI response failed Quill's structured-output validation.",
+      };
+    }
+
+    const released = validateRelease(parsed.data, intelligence);
+    if (!released) {
+      return {
+        status: "blocked" as const,
+        reason: "The AI response crossed Quill's evidence or safety boundary.",
+      };
+    }
+
+    return {
+      status: "ready" as const,
+      output: released,
+    };
+  } catch {
     return {
       status: "blocked" as const,
-      reason: "The AI response failed Quill's structured-output validation.",
+      reason: "The AI coach was temporarily unavailable. Review the deterministic intelligence panel instead.",
     };
   }
-
-  const released = validateRelease(parsed.data, intelligence);
-  if (!released) {
-    return {
-      status: "blocked" as const,
-      reason: "The AI response crossed Quill's evidence or safety boundary.",
-    };
-  }
-
-  return {
-    status: "ready" as const,
-    output: released,
-  };
 }
