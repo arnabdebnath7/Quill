@@ -17,7 +17,7 @@ export function Button({ variant = "primary", size = "md", loading, className, c
     success: "bg-up-soft text-up hover:bg-up/20 active:scale-[0.98]",
   };
   const sizes = { sm: "min-h-10 px-3.5 text-[13px] rounded-lg gap-1.5", md: "min-h-11 px-4 text-sm rounded-xl gap-2", lg: "min-h-12 px-6 text-[15px] rounded-xl gap-2", icon: "h-11 w-11 rounded-lg" };
-  return <motion.button whileTap={{ scale: 0.985 }} whileHover={variant === "primary" ? { y: -1 } : {}} className={cn("inline-flex items-center justify-center font-medium tracking-[-0.01em] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer select-none", styles[variant], sizes[size], className)} disabled={disabled || loading} {...props}>{loading && <Loader2 className="h-4 w-4 animate-spin" />}{children}</motion.button>;
+  return <button className={cn("inline-flex items-center justify-center font-medium tracking-[-0.01em] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer select-none", styles[variant], sizes[size], className)} disabled={disabled || loading} {...props}>{loading && <Loader2 className="h-4 w-4 animate-spin" />}{children}</button>;
 }
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) { return <div className={cn("rounded-2xl border border-line bg-card shadow-[var(--shadow)]", className)} {...props} />; }
