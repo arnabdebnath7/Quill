@@ -6,6 +6,6 @@ export const metadata = { title: "Sign in" };
 
 export default async function LoginPage() {
   const user = await getSessionUser();
-  if (user) redirect("/");
+  if (user) redirect("/today");
   return <LoginClient />;
 }
