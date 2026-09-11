@@ -14,7 +14,7 @@ export function AppInstall() {
   useEffect(() => {
     const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
     setInstalled(standalone);
-    setDismissed(window.sessionStorage.getItem(DISMISS_KEY) === "1");
+    setDismissed(window.localStorage.getItem(DISMISS_KEY) === "1");
 
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
@@ -28,7 +28,7 @@ export function AppInstall() {
   if (installed || dismissed || !deferred) return null;
 
   const dismiss = () => {
-    window.sessionStorage.setItem(DISMISS_KEY, "1");
+    window.localStorage.setItem(DISMISS_KEY, "1");
     setDismissed(true);
     setDeferred(null);
   };
