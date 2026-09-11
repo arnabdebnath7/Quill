@@ -9,7 +9,7 @@ type ButtonVariant = "primary" | "ghost" | "outline" | "soft" | "danger" | "succ
 
 export function Button({ variant = "primary", size = "md", loading, className, children, disabled, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: "sm" | "md" | "lg" | "icon"; loading?: boolean }) {
   const styles: Record<ButtonVariant, string> = {
-    primary: "bg-brandsolid text-brandon hover:opacity-90 shadow-[0_1px_2px_rgba(0,0,0,0.2)] active:scale-[0.98]",
+    primary: "bg-brandsolid text-brandon quill-primary hover:brightness-[1.03] active:scale-[0.98]",
     ghost: "hover:bg-line/60 text-sub hover:text-ink active:scale-[0.98]",
     outline: "border border-linestrong bg-transparent hover:bg-line/40 active:scale-[0.98]",
     soft: "bg-line/50 hover:bg-line active:scale-[0.98]",
@@ -17,7 +17,7 @@ export function Button({ variant = "primary", size = "md", loading, className, c
     success: "bg-up-soft text-up hover:bg-up/20 active:scale-[0.98]",
   };
   const sizes = { sm: "min-h-10 px-3.5 text-[13px] rounded-lg gap-1.5", md: "min-h-11 px-4 text-sm rounded-xl gap-2", lg: "min-h-12 px-6 text-[15px] rounded-xl gap-2", icon: "h-11 w-11 rounded-lg" };
-  return <button className={cn("inline-flex items-center justify-center font-medium tracking-[-0.01em] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer select-none", styles[variant], sizes[size], className)} disabled={disabled || loading} {...props}>{loading && <Loader2 className="h-4 w-4 animate-spin" />}{children}</button>;
+  return <motion.button whileTap={{ scale: 0.985 }} whileHover={variant === "primary" ? { y: -1 } : {}} className={cn("inline-flex items-center justify-center font-medium tracking-[-0.01em] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer select-none", styles[variant], sizes[size], className)} disabled={disabled || loading} {...props}>{loading && <Loader2 className="h-4 w-4 animate-spin" />}{children}</motion.button>;
 }
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) { return <div className={cn("rounded-2xl border border-line bg-card shadow-[var(--shadow)]", className)} {...props} />; }
