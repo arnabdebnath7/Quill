@@ -18,7 +18,7 @@ const NAV=[
   {href:"/journal/calendar",label:"Calendar",icon:CalendarDays},
   {href:"/watchlist",label:"Watchlist",icon:Star},
   {href:"/insights",label:"Insights",icon:PieChart},
-  {href:"/intelligence",label:"Intelligence",icon:Brain},
+  {href:"/intelligence",label:"Memo",icon:Brain},
   {href:"/performance",label:"Performance",icon:BarChart3},
   {href:"/settings",label:"Settings",icon:Settings}
 ];
@@ -26,12 +26,12 @@ const MOBILE_NAV=[
   {href:"/today",label:"Today",icon:CalendarDays},
   {href:"/trades",label:"Trades",icon:CandlestickChart},
   {href:"/journal",label:"Journal",icon:Feather},
-  {href:"/intelligence",label:"Intelligence",icon:Brain}
+  {href:"/intelligence",label:"Memo",icon:Brain}
 ];
 const QUICK=[
   {href:"/trades?new=1",label:"Log trade",icon:CandlestickChart},
   {href:"/journal?new=1",label:"Write",icon:Feather},
-  {href:"/intelligence",label:"Intelligence",icon:Brain},
+  {href:"/intelligence",label:"Memo",icon:Brain},
   {href:"/performance",label:"Performance",icon:BarChart3}
 ];
 
