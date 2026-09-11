@@ -5,7 +5,6 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createSession } from "@/lib/auth";
 import { verifyFirebaseIdToken } from "@/lib/firebase-verify";
-import { seedUserDemoData } from "@/db/seed";
 
 const bodySchema = z.object({
   idToken: z.string().min(50).max(8192),
@@ -38,13 +37,6 @@ export async function POST(req: Request) {
         .insert(users)
         .values({ email: identity.email, name: identity.name, image: identity.picture })
         .returning();
-
-      // Demo data is optional. A seed failure must never make authentication fail.
-      try {
-        await seedUserDemoData(user.id);
-      } catch (e) {
-        console.error("[auth/google] Demo-data seed failed; continuing login:", e);
-      }
     } else if (identity.picture && user.image !== identity.picture) {
       await db.update(users).set({ image: identity.picture }).where(eq(users.id, user.id));
     }
