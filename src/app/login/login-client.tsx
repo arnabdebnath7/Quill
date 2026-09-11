@@ -31,16 +31,11 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 function friendlyError(e: unknown): string {
   if (e instanceof FirebaseError) {
     switch (e.code) {
-      case "auth/unauthorized-domain":
-        return "This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";
-      case "auth/operation-not-allowed":
-        return "Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";
-      case "auth/network-request-failed":
-        return "Network hiccup reaching Google. Check your connection and retry.";
-      case "auth/too-many-requests":
-        return "Too many attempts. Give it a minute and try again.";
-      default:
-        return `Google sign-in failed (${e.code.replace("auth/", "")}).`;
+      case "auth/unauthorized-domain": return "This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";
+      case "auth/operation-not-allowed": return "Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+      case "auth/network-request-failed": return "Network hiccup reaching Google. Check your connection and retry.";
+      case "auth/too-many-requests": return "Too many attempts. Give it a minute and try again.";
+      default: return `Google sign-in failed (${e.code.replace("auth/", "")}).`;
     }
   }
   return e instanceof Error ? e.message : "Something went wrong. Please try again.";
@@ -48,196 +43,60 @@ function friendlyError(e: unknown): string {
 
 export function LoginClient() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange" | "redirecting">("idle");
+  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange">("idle");
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== "idle";
 
-  const exchange = useCallback(
-    async (idToken: string) => {
-      setPhase("exchange");
-      const res = await fetch("/api/auth/google", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error ?? "Sign-in verification failed.");
-      }
-      router.replace("/");
-      router.refresh();
-    },
-    [router]
-  );
+  const exchange = useCallback(async (idToken: string) => {
+    setPhase("exchange");
+    const res = await fetch("/api/auth/google", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+    if (!res.ok) { const json = await res.json().catch(() => ({})); throw new Error(json.error ?? "Sign-in verification failed."); }
+    router.replace("/"); router.refresh();
+  }, [router]);
 
   useEffect(() => {
     let dead = false;
-    consumeRedirectResult()
-      .then((token) => {
-        if (dead || !token) return;
-        exchange(token).catch((e) => {
-          if (!dead) {
-            setError(friendlyError(e));
-            setPhase("idle");
-          }
-        });
-      })
-      .catch((e) => {
-        if (!dead) setError(friendlyError(e));
-      });
-    return () => {
-      dead = true;
-    };
+    consumeRedirectResult().then((token) => {
+      if (dead || !token) return;
+      exchange(token).catch((e) => { if (!dead) { setError(friendlyError(e)); setPhase("idle"); } });
+    }).catch((e) => { if (!dead) setError(friendlyError(e)); });
+    return () => { dead = true; };
   }, [exchange]);
 
   const signIn = async () => {
-    setError(null);
-    setPhase("google");
-    try {
-      const idToken = await signInWithGoogle();
-      await exchange(idToken);
-    } catch (e) {
-      if (e instanceof SignInCancelled) {
-        setPhase("idle");
-        return;
-      }
-      setError(friendlyError(e));
-      setPhase("idle");
-    }
+    setError(null); setPhase("google");
+    try { await exchange(await signInWithGoogle()); }
+    catch (e) { if (e instanceof SignInCancelled) setPhase("idle"); else { setError(friendlyError(e)); setPhase("idle"); } }
   };
 
   const enterAsGuest = async () => {
-    setError(null);
-    setPhase("guest");
+    setError(null); setPhase("guest");
     try {
       const res = await fetch("/api/auth/guest", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Guest access failed. Please try again.");
-      router.replace("/");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Guest access failed. Please try again.");
-      setPhase("idle");
-    }
+      router.replace("/"); router.refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Guest access failed. Please try again."); setPhase("idle"); }
   };
 
-  const label =
-    phase === "google"
-      ? "Waiting for Google…"
-      : phase === "exchange"
-        ? "Opening your journal…"
-        : phase === "guest"
-          ? "Opening guest journal…"
-          : "Continue with Google";
+  const label = phase === "google" ? "Waiting for Google…" : phase === "exchange" ? "Opening your journal…" : phase === "guest" ? "Opening guest journal…" : "Continue with Google";
 
   return (
     <div className="relative z-10 flex min-h-dvh flex-col">
       <div className="absolute right-4 top-4"><ThemeToggle /></div>
-
       <div className="flex flex-1 flex-col items-center justify-center px-5 py-14">
-        <motion.div
-          initial={{ scale: 0.7, opacity: 0, rotate: -12 }}
-          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-          transition={{ type: "spring", bounce: 0.35, duration: 0.8 }}
-        >
-          <Logo size={54} />
+        <motion.div initial={{ scale: 0.7, opacity: 0, rotate: -12 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ type: "spring", bounce: 0.35, duration: 0.8 }}><Logo size={54} /></motion.div>
+        <motion.h1 initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.12, duration: 0.6, ease: EASE }} className="mt-6 text-center font-display text-[34px] font-semibold leading-[1.08] tracking-[-0.03em] sm:text-[44px]">Your trades.<br />Your days. <span className="text-brand">One journal.</span></motion.h1>
+        <motion.p initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.22, duration: 0.6, ease: EASE }} className="mt-4 max-w-[380px] text-center text-[14.5px] leading-relaxed text-sub">Log the market moves and the life between them — with live prices across US stocks, India, forex, crypto and gold.</motion.p>
+        <motion.div initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.32, duration: 0.6, ease: EASE }} className="mt-9 flex w-full max-w-[320px] flex-col items-center gap-3">
+          <button onClick={signIn} disabled={busy} className="group relative flex h-12 w-full items-center justify-center gap-3 rounded-full border border-linestrong bg-card text-[14.5px] font-medium shadow-[var(--shadow)] transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] disabled:opacity-70 cursor-pointer">{busy ? <motion.span className="h-[18px] w-[18px] rounded-full border-2 border-line border-t-brand" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }} /> : <GoogleMark />}{label}</button>
+          <button onClick={enterAsGuest} disabled={busy} className="h-11 w-full rounded-full border border-line bg-transparent px-4 text-[13.5px] font-medium text-sub transition-colors hover:bg-card hover:text-ink active:scale-[0.98] disabled:opacity-60 cursor-pointer">Enter without an account</button>
+          {error && <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="max-w-[300px] text-center text-[12px] leading-relaxed text-down">{error}</motion.p>}
+          <p className="text-center text-[11.5px] leading-relaxed text-faint">Google keeps your account synced. Guest mode starts with a private blank journal.</p>
         </motion.div>
-
-        <motion.h1
-          initial={{ y: 18, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.12, duration: 0.6, ease: EASE }}
-          className="mt-6 text-center font-display text-[34px] font-semibold leading-[1.08] tracking-[-0.03em] sm:text-[44px]"
-        >
-          Your trades.
-          <br />
-          Your days. <span className="text-brand">One journal.</span>
-        </motion.h1>
-
-        <motion.p
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.22, duration: 0.6, ease: EASE }}
-          className="mt-4 max-w-[380px] text-center text-[14.5px] leading-relaxed text-sub"
-        >
-          Log the market moves and the life between them — with live prices
-          across US stocks, India, forex, crypto and gold.
-        </motion.p>
-
-        <motion.div
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.32, duration: 0.6, ease: EASE }}
-          className="mt-9 flex w-full max-w-[320px] flex-col items-center gap-3"
-        >
-          <button
-            onClick={signIn}
-            disabled={busy}
-            className="group relative flex h-12 w-full items-center justify-center gap-3 rounded-full border border-linestrong bg-card text-[14.5px] font-medium shadow-[var(--shadow)] transition-all hover:shadow-lg active:scale-[0.98] disabled:opacity-70 cursor-pointer"
-          >
-            {busy ? (
-              <motion.span
-                className="h-[18px] w-[18px] rounded-full border-2 border-line border-t-brand"
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-              />
-            ) : (
-              <GoogleMark />
-            )}
-            {label}
-          </button>
-
-          <button
-            onClick={enterAsGuest}
-            disabled={busy}
-            className="h-11 w-full rounded-full border border-line bg-transparent px-4 text-[13.5px] font-medium text-sub transition-colors hover:bg-card hover:text-ink active:scale-[0.98] disabled:opacity-60 cursor-pointer"
-          >
-            Enter without an account
-          </button>
-
-          {error && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="max-w-[300px] text-center text-[12px] leading-relaxed text-down"
-            >
-              {error}
-            </motion.p>
-          )}
-          <p className="text-center text-[11.5px] leading-relaxed text-faint">
-            Google keeps your account synced. Guest mode creates a private demo journal on this device.
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5, duration: 0.8 }}
-          className="mt-12 grid max-w-[520px] grid-cols-2 gap-2.5 sm:grid-cols-4"
-        >
-          {FEATURES.map((f, i) => (
-            <motion.div
-              key={f.label}
-              initial={{ y: 14, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 + i * 0.08, duration: 0.5, ease: EASE }}
-              className="flex flex-col items-center gap-2 rounded-2xl border border-line bg-card px-3 py-4 text-center"
-            >
-              <f.icon className="h-4 w-4 text-brand" />
-              <span className="text-[11px] font-medium leading-tight text-sub">{f.label}</span>
-            </motion.div>
-          ))}
-        </motion.div>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.8 }} className="mt-12 grid max-w-[520px] grid-cols-2 gap-2.5 sm:grid-cols-4">{FEATURES.map((f, i) => <motion.div key={f.label} initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 + i * 0.08, duration: 0.5, ease: EASE }} className="flex flex-col items-center gap-2 rounded-2xl border border-line bg-card px-3 py-4 text-center"><f.icon className="h-4 w-4 text-brand" /><span className="text-[11px] font-medium leading-tight text-sub">{f.label}</span></motion.div>)}</motion.div>
       </div>
-
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.7 }}
-        className="pb-6 text-center text-[11px] text-faint"
-      >
-        Quill — a journal that trades as hard as you do.
-      </motion.p>
+      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="pb-6 text-center text-[11px] text-faint">Quill — a journal that trades as hard as you do.</motion.p>
     </div>
   );
 }
