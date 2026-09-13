@@ -4,32 +4,261 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
-import { Activity, BookOpenText, Globe2, ShieldCheck } from "lucide-react";
+import { Activity, BookOpenText, Feather, Globe2, Lock, ShieldCheck, Sparkles } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/app-shell";
 import { consumeRedirectResult, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
+import { EASE } from "@/lib/motion";
 
-function GoogleMark(){return <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden><path fill="#4285F4" d="M23.5 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.09 3.57-5.16 3.57-8.81Z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.87-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.29v3.1A12 12 0 0 0 12 24Z"/><path fill="#FBBC05" d="M5.27 14.28a7.2 7.2 0 0 1 0-4.56v-3.1H1.29a12 12 0 0 0 0 10.76l3.98-3.1Z"/><path fill="#EA4335" d="M12 4.76c1.76 0 3.35.6 4.59 1.8l3.44-3.44A11.98 11.98 0 0 0 12 0 12 12 0 0 0 1.29 6.62l3.98 3.1C6.22 6.87 8.87 4.76 12 4.76Z"/></svg>}
-const FEATURES=[{icon:Activity,label:"Live prices"},{icon:BookOpenText,label:"Trade + life"},{icon:Globe2,label:"5 markets"},{icon:ShieldCheck,label:"Private"}];
-const EASE=[0.22,1,0.36,1] as const;
-function friendlyError(e:unknown){if(e instanceof FirebaseError){switch(e.code){case"auth/unauthorized-domain":return"This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";case"auth/operation-not-allowed":return"Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";case"auth/network-request-failed":return"Network hiccup reaching Google. Check your connection and retry.";case"auth/too-many-requests":return"Too many attempts. Give it a minute and try again.";default:return`Google sign-in failed (${e.code.replace("auth/","")}).`;}}return e instanceof Error?e.message:"Something went wrong. Please try again.";}
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
+      <path fill="#4285F4" d="M23.5 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.09 3.57-5.16 3.57-8.81Z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.87-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.29v3.1A12 12 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.27 14.28a7.2 7.2 0 0 1 0-4.56v-3.1H1.29a12 12 0 0 0 0 10.76l3.98-3.1Z" />
+      <path fill="#EA4335" d="M12 4.76c1.76 0 3.35.6 4.59 1.8l3.44-3.44A11.98 11.98 0 0 0 12 0 12 12 0 0 0 1.29 6.62l3.98 3.1C6.22 6.87 8.87 4.76 12 4.76Z" />
+    </svg>
+  );
+}
 
-function QuillRobot(){return <motion.div initial={{opacity:0,y:14,scale:.9}} animate={{opacity:1,y:0,scale:1}} transition={{delay:.05,duration:.62,ease:EASE}} className="relative mx-auto h-[178px] w-[178px] sm:h-[194px] sm:w-[194px]" aria-label="Quill robot companion">
-  <div className="absolute inset-x-7 bottom-3 h-8 rounded-full bg-black/10 blur-xl"/>
-  <motion.div animate={{y:[0,-4,0]}} transition={{duration:3.6,repeat:Infinity,ease:"easeInOut"}} className="absolute inset-0">
-    <motion.div animate={{rotate:[0,-1,0,1,0]}} transition={{duration:5.8,repeat:Infinity,ease:"easeInOut"}} className="absolute inset-[10%]" style={{transformStyle:"preserve-3d"}}>
-      <div className="absolute left-[25%] top-[58%] h-[29%] w-[50%] rounded-[30%] bg-gradient-to-br from-[#fbf7ef] via-[#e7e0d4] to-[#c8bfb2] shadow-[inset_-9px_-10px_16px_rgba(0,0,0,.10),inset_8px_7px_14px_rgba(255,255,255,.8),0_16px_25px_rgba(0,0,0,.12)]"/>
-      <div className="absolute left-[14%] top-[25%] h-[49%] w-[72%] rounded-[30%] border border-black/5 bg-gradient-to-br from-[#fffaf2] via-[#eee8de] to-[#cdc5ba] shadow-[inset_-14px_-15px_23px_rgba(0,0,0,.12),inset_11px_10px_18px_rgba(255,255,255,.86),0_20px_38px_rgba(0,0,0,.14)]"/>
-      <div className="absolute left-[25%] top-[33%] h-[31%] w-[50%] rounded-[28%] bg-gradient-to-br from-[#33322f] via-[#1d1d1a] to-[#0b0c0a] shadow-[inset_5px_5px_9px_rgba(255,255,255,.12),inset_-6px_-7px_10px_rgba(0,0,0,.28),0_7px_12px_rgba(0,0,0,.16)]"/>
-      <motion.div animate={{scaleY:[1,1,.08,1,1]}} transition={{duration:4.1,repeat:Infinity,times:[0,.47,.485,.5,1],ease:"easeInOut"}} className="absolute left-[35%] top-[44%] h-[6%] w-[8%] rounded-full bg-[#f6efe1]"/>
-      <motion.div animate={{scaleY:[1,1,.08,1,1]}} transition={{duration:4.1,repeat:Infinity,times:[0,.47,.485,.5,1],ease:"easeInOut"}} className="absolute right-[35%] top-[44%] h-[6%] w-[8%] rounded-full bg-[#f6efe1]"/>
-      <motion.div animate={{y:[0,-2,0],rotate:[0,5,0]}} transition={{duration:2.9,repeat:Infinity,ease:"easeInOut"}} className="absolute left-[43%] -top-[4%] h-[17%] w-[14%] rounded-[46%] bg-gradient-to-br from-[#f0aa5e] to-[#bf6828] shadow-[inset_4px_4px_7px_rgba(255,255,255,.42),inset_-5px_-5px_7px_rgba(0,0,0,.16),0_5px_10px_rgba(0,0,0,.10)]"><span className="absolute left-1/2 top-[10%] h-[24%] w-[16%] -translate-x-1/2 rounded-full bg-[#fff4df]/80"/></motion.div>
-      <div className="absolute left-[4%] top-[57%] h-[18%] w-[11%] rounded-full bg-gradient-to-br from-[#f0aa5e] to-[#bf6828] shadow-[inset_3px_3px_6px_rgba(255,255,255,.4),inset_-4px_-4px_6px_rgba(0,0,0,.14)]"/>
-      <div className="absolute right-[4%] top-[57%] h-[18%] w-[11%] rounded-full bg-gradient-to-br from-[#f0aa5e] to-[#bf6828] shadow-[inset_3px_3px_6px_rgba(255,255,255,.4),inset_-4px_-4px_6px_rgba(0,0,0,.14)]"/>
-      <motion.div animate={{x:[0,1.5,0],rotate:[0,4,0]}} transition={{duration:2.7,repeat:Infinity,ease:"easeInOut"}} className="absolute right-[1%] top-[43%] h-[13%] w-[11%] rounded-full bg-gradient-to-br from-[#f4b36c] to-[#c8732e] shadow-[inset_3px_3px_6px_rgba(255,255,255,.38),inset_-4px_-4px_6px_rgba(0,0,0,.14)]"/>
-      <div className="absolute left-[28%] bottom-[1%] h-[9%] w-[17%] rounded-[42%] bg-gradient-to-br from-[#efab61] to-[#bf6828]"/><div className="absolute right-[28%] bottom-[1%] h-[9%] w-[17%] rounded-[42%] bg-gradient-to-br from-[#efab61] to-[#bf6828]"/>
-      <div className="absolute left-[31%] top-[68%] h-[4%] w-[10%] rounded-full bg-[#6b675f]/35"/><div className="absolute right-[31%] top-[68%] h-[4%] w-[10%] rounded-full bg-[#6b675f]/35"/>
-    </motion.div>
-  </motion.div>
-</motion.div>}
+const FEATURES = [
+  { icon: Activity, label: "Live prices" },
+  { icon: BookOpenText, label: "Trade + life journal" },
+  { icon: Globe2, label: "5 markets" },
+  { icon: ShieldCheck, label: "Private by design" },
+];
 
-export function LoginClient(){const router=useRouter();const[phase,setPhase]=useState<"idle"|"google"|"guest"|"exchange">("idle");const[error,setError]=useState<string|null>(null);const busy=phase!=="idle";const exchange=useCallback(async(idToken:string)=>{setPhase("exchange");const res=await fetch("/api/auth/google",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken})});if(!res.ok){const json=await res.json().catch(()=>({}));throw new Error(json.error??"Sign-in verification failed.");}router.replace("/");router.refresh();},[router]);useEffect(()=>{let dead=false;consumeRedirectResult().then(token=>{if(dead||!token)return;exchange(token).catch(e=>{if(!dead){setError(friendlyError(e));setPhase("idle");}})}).catch(e=>{if(!dead)setError(friendlyError(e));});return()=>{dead=true;};},[exchange]);const signIn=async()=>{setError(null);setPhase("google");try{await exchange(await signInWithGoogle());}catch(e){if(e instanceof SignInCancelled){setPhase("idle");return;}setError(friendlyError(e));setPhase("idle");}};const enterAsGuest=async()=>{setError(null);setPhase("guest");try{const res=await fetch("/api/auth/guest",{method:"POST"});const json=await res.json().catch(()=>({}));if(!res.ok)throw new Error(json.error??"Guest access failed. Please try again.");router.replace("/");router.refresh();}catch(e){setError(e instanceof Error?e.message:"Guest access failed. Please try again.");setPhase("idle");}};return <div className="relative z-10 flex min-h-dvh items-center justify-center bg-[radial-gradient(circle_at_50%_0%,rgba(212,119,46,.10),transparent_34%)] px-0 sm:px-5 sm:py-5"><div className="relative flex min-h-dvh w-full flex-col overflow-hidden border-line bg-paper sm:min-h-[calc(100dvh-40px)] sm:max-w-[460px] sm:rounded-[32px] sm:border sm:shadow-[0_24px_70px_rgba(27,25,22,.15)] dark:sm:shadow-[0_24px_70px_rgba(0,0,0,.45)]"><div className="flex items-center justify-between px-5 pb-3 pt-[max(15px,env(safe-area-inset-top))]"><div className="flex items-center gap-2.5"><Logo size={31}/><div><div className="font-display text-[17px] font-semibold leading-none tracking-[-.025em]">Quill</div><div className="mt-1 text-[9.5px] font-medium uppercase tracking-[.16em] text-faint">private journal</div></div></div><div className="flex items-center gap-2"><span className="flex items-center gap-1.5 rounded-full border border-line bg-card px-2.5 py-1.5 text-[10px] font-medium text-faint"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-up"/>ready</span><ThemeToggle/></div></div><div className="flex flex-1 flex-col overflow-y-auto px-5 pb-[max(18px,env(safe-area-inset-bottom))] pt-2"><div className="flex flex-1 flex-col justify-center"><QuillRobot/><motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.19,duration:.52,ease:EASE}} className="mx-auto mt-0 max-w-[340px] text-center"><p className="mb-2 text-[10px] font-semibold uppercase tracking-[.18em] text-brand">Welcome back</p><h1 className="font-display text-[31px] font-semibold leading-[1.04] tracking-[-.04em] sm:text-[35px]">Your trades.<br/>Your days. <span className="text-brand">One journal.</span></h1><p className="mt-3 text-[13.5px] leading-relaxed text-sub">A calm private workspace for trades, notes and behavioural intelligence.</p></motion.div><motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{delay:.3,duration:.55,ease:EASE}} className="mx-auto mt-6 w-full max-w-[340px] rounded-[24px] border border-line bg-card p-2.5 shadow-[var(--shadow)]"><button onClick={signIn} disabled={busy} className="group flex h-12 w-full items-center justify-center gap-3 rounded-[17px] bg-brand text-brandon text-[14px] font-semibold shadow-[0_10px_24px_-14px_var(--brand)] transition-transform hover:brightness-[1.03] active:scale-[.985] disabled:opacity-65">{busy?<motion.span className="h-[18px] w-[18px] rounded-full border-2 border-brandon/30 border-t-brandon" animate={{rotate:360}} transition={{repeat:Infinity,duration:.7,ease:"linear"}}/>:<GoogleMark/>}{phase==="exchange"?"Opening your workspace…":phase==="google"?"Waiting for Google…":phase==="guest"?"Opening private workspace…":"Continue with Google"}</button><button onClick={enterAsGuest} disabled={busy} className="mt-1.5 flex h-11 w-full items-center justify-center rounded-[16px] text-[13px] font-medium text-sub transition-colors hover:bg-paper-2 hover:text-ink active:scale-[.985] disabled:opacity-60">Use a private workspace</button>{error&&<motion.p initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} className="px-2 pt-1 text-center text-[11.5px] leading-relaxed text-down">{error}</motion.p>}<p className="px-2 pb-1 pt-2 text-center text-[10.5px] leading-relaxed text-faint">No seeded demo trades. Your workspace starts clean.</p></motion.div></div><motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.48,duration:.6}} className="mx-auto mt-7 flex w-full max-w-[340px] items-center justify-center gap-4 text-[10px] font-medium text-faint">{FEATURES.map((f,i)=><div key={f.label} className="flex items-center gap-1.5"><f.icon className="h-3.5 w-3.5 text-brand"/><span>{f.label}</span>{i<FEATURES.length-1&&<span className="ml-2 h-1 w-1 rounded-full bg-line"/>}</div>)}</motion.div></div><p className="pb-3 text-center text-[9.5px] text-faint">Quill — a journal that trades as hard as you do.</p></div></div>}
+function friendlyError(e: unknown) {
+  if (e instanceof FirebaseError) {
+    switch (e.code) {
+      case "auth/unauthorized-domain":
+        return "This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";
+      case "auth/operation-not-allowed":
+        return "Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+      case "auth/network-request-failed":
+        return "Network hiccup reaching Google. Check your connection and retry.";
+      case "auth/too-many-requests":
+        return "Too many attempts. Give it a minute and try again.";
+      default:
+        return `Google sign-in failed (${e.code.replace("auth/", "")}).`;
+    }
+  }
+  return e instanceof Error ? e.message : "Something went wrong. Please try again.";
+}
+
+export function LoginClient() {
+  const router = useRouter();
+  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const busy = phase !== "idle";
+
+  const exchange = useCallback(
+    async (idToken: string) => {
+      setPhase("exchange");
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? "Sign-in verification failed.");
+      }
+      router.replace("/");
+      router.refresh();
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    let dead = false;
+    consumeRedirectResult()
+      .then((token) => {
+        if (dead || !token) return;
+        exchange(token).catch((e) => {
+          if (!dead) {
+            setError(friendlyError(e));
+            setPhase("idle");
+          }
+        });
+      })
+      .catch((e) => {
+        if (!dead) setError(friendlyError(e));
+      });
+    return () => {
+      dead = true;
+    };
+  }, [exchange]);
+
+  const signIn = async () => {
+    setError(null);
+    setPhase("google");
+    try {
+      await exchange(await signInWithGoogle());
+    } catch (e) {
+      if (e instanceof SignInCancelled) {
+        setPhase("idle");
+        return;
+      }
+      setError(friendlyError(e));
+      setPhase("idle");
+    }
+  };
+
+  const enterAsGuest = async () => {
+    setError(null);
+    setPhase("guest");
+    try {
+      const res = await fetch("/api/auth/guest", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Guest access failed. Please try again.");
+      router.replace("/");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Guest access failed. Please try again.");
+      setPhase("idle");
+    }
+  };
+
+  return (
+    <div className="relative z-10 min-h-dvh bg-background md:grid md:grid-cols-[1.05fr_1fr]">
+      {/* brand panel (desktop) */}
+      <div className="relative hidden flex-col justify-between border-r border-border bg-sidebar p-10 md:flex">
+        <div className="flex items-center gap-3">
+          <Logo size={36} />
+          <div>
+            <div className="font-display text-[19px] font-semibold leading-none tracking-[-0.025em]">Quill</div>
+            <div className="mt-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">trade & life</div>
+          </div>
+        </div>
+
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}>
+          <h1 className="max-w-md font-display text-[44px] font-semibold leading-[1.02] tracking-[-0.035em]">
+            Your trades.
+            <br />
+            Your days.
+            <br />
+            <span className="text-primary">One journal.</span>
+          </h1>
+          <p className="mt-5 max-w-sm text-[14px] leading-relaxed text-muted-foreground">
+            A calm, private workspace for logging trades, writing your day down, and understanding the behaviour behind the P&L.
+          </p>
+          <div className="mt-8 grid grid-cols-2 gap-3">
+            {FEATURES.map((f) => (
+              <div key={f.label} className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-3">
+                <f.icon className="h-4 w-4 shrink-0 text-primary" />
+                <span className="text-[12px] font-medium">{f.label}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" /> Everything stays in your account. Nothing is shared.
+        </div>
+      </div>
+
+      {/* form column */}
+      <div className="flex min-h-dvh flex-col px-5 py-6 sm:px-10 md:min-h-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 md:hidden">
+            <Logo size={32} />
+            <div>
+              <div className="font-display text-[17px] font-semibold leading-none tracking-[-0.025em]">Quill</div>
+              <div className="mt-1 text-[9.5px] font-medium uppercase tracking-[0.16em] text-muted-foreground">private journal</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5 text-[10px] font-medium text-muted-foreground">
+              <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-up" /> ready
+            </span>
+            <ThemeToggle />
+          </div>
+        </div>
+
+        <div className="flex flex-1 flex-col justify-center py-10">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05, duration: 0.5, ease: EASE }}
+            className="mx-auto w-full max-w-[380px]"
+          >
+            {/* mobile brand */}
+            <div className="mb-8 flex items-center gap-3 md:hidden">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <Feather className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Welcome back</p>
+                <h1 className="font-display text-[26px] font-semibold leading-[1.05] tracking-[-0.03em]">One journal.</h1>
+              </div>
+            </div>
+
+            <div className="hidden md:block">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Welcome back</p>
+              <h2 className="mt-1.5 font-display text-[28px] font-semibold leading-[1.05] tracking-[-0.03em]">Open your workspace</h2>
+            </div>
+
+            <div className="mt-7 space-y-2.5">
+              <motion.button
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.5, ease: EASE }}
+                onClick={signIn}
+                disabled={busy}
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card text-[14px] font-semibold transition-all hover:bg-muted/60 active:scale-[0.985] disabled:opacity-60 cursor-pointer"
+              >
+                {busy ? (
+                  <motion.span
+                    className="h-[18px] w-[18px] rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                  />
+                ) : (
+                  <GoogleMark />
+                )}
+                {phase === "exchange"
+                  ? "Opening your workspace…"
+                  : phase === "google"
+                    ? "Waiting for Google…"
+                    : phase === "guest"
+                      ? "Opening private workspace…"
+                      : "Continue with Google"}
+              </motion.button>
+
+              <motion.button
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.22, duration: 0.5, ease: EASE }}
+                onClick={enterAsGuest}
+                disabled={busy}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-border bg-transparent text-[13.5px] font-medium text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground active:scale-[0.985] disabled:opacity-60 cursor-pointer"
+              >
+                <Sparkles className="h-4 w-4" />
+                Use a private workspace
+              </motion.button>
+
+              {error && (
+                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="px-1 pt-1 text-center text-[12px] leading-relaxed text-destructive">
+                  {error}
+                </motion.p>
+              )}
+
+              <p className="px-1 pt-2 text-center text-[11px] leading-relaxed text-muted-foreground">
+                Private workspaces live only on this device — no account needed.
+              </p>
+            </div>
+          </motion.div>
+        </div>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="text-center text-[10.5px] text-muted-foreground md:hidden"
+        >
+          Quill — a journal that trades as hard as you do.
+        </motion.p>
+      </div>
+    </div>
+  );
+}

@@ -60,14 +60,21 @@ export const journalEntries = pgTable("journal_entries", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const watchlist = pgTable("watchlist", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  symbol: text("symbol").notNull(),
-  name: text("name").notNull(),
-  market: text("market").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const watchlist = pgTable(
+  "watchlist",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    symbol: text("symbol").notNull(),
+    name: text("name").notNull(),
+    market: text("market").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    // One watchlist row per (user, symbol): the DB enforces it, the API upserts.
+    userSymbolUnique: uniqueIndex("watchlist_user_symbol_idx").on(table.userId, table.symbol),
+  }),
+);
 
 export const dailyCheckins = pgTable("daily_checkins", {
   id: uuid("id").defaultRandom().primaryKey(),

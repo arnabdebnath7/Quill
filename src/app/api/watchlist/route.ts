@@ -17,7 +17,7 @@ export async function GET() {
 }
 
 const createSchema = z.object({
-  symbol: z.string().min(1).max(24),
+  symbol: z.string().min(1).max(24).transform((v) => v.trim().toUpperCase()),
   name: z.string().min(1).max(120),
   market: z.enum(["us", "india", "forex", "crypto", "gold"]),
 });
@@ -33,20 +33,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid symbol", details: String(e) }, { status: 400 });
   }
 
+  // Upsert keyed on (user, symbol) — re-adding a symbol refreshes its name
+  // instead of failing or creating a duplicate row.
   const [row] = await db
     .insert(watchlist)
-    .values({ userId: user.id, symbol: body.symbol.toUpperCase(), name: body.name, market: body.market })
-    .onConflictDoNothing()
+    .values({ userId: user.id, symbol: body.symbol, name: body.name, market: body.market })
+    .onConflictDoUpdate({
+      target: [watchlist.userId, watchlist.symbol],
+      set: { name: body.name, market: body.market },
+    })
     .returning();
 
-  if (!row) {
-    const [existing] = await db
-      .select()
-      .from(watchlist)
-      .where(eq(watchlist.userId, user.id))
-      .limit(200);
-    void existing;
-    return NextResponse.json({ error: "Already in watchlist" }, { status: 409 });
-  }
+  if (!row) return NextResponse.json({ error: "Not found" }, { status: 500 });
   return NextResponse.json({ item: row }, { status: 201 });
 }
