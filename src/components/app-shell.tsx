@@ -3,10 +3,11 @@ import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, Brain, CalendarDays, CandlestickChart, Feather, LayoutDashboard, LogOut, Monitor, PieChart, Plus, Settings, ShieldCheck, Star, Sun, Moon, X } from "lucide-react";
+import { BarChart3, CalendarDays, CandlestickChart, Feather, LayoutDashboard, LogOut, Monitor, PieChart, Plus, Settings, ShieldCheck, Star, Sun, Moon, X } from "lucide-react";
 import { useTheme } from "@/components/providers";
 import { Splash } from "@/components/splash";
 import { AppInstall } from "@/components/app-install";
+import { Mimo } from "@/components/mimo";
 import { avatarHue, cn, initials } from "@/lib/utils";
 import type { User } from "@/db/schema";
 
@@ -18,7 +19,7 @@ const NAV=[
   {href:"/journal/calendar",label:"Calendar",icon:CalendarDays},
   {href:"/watchlist",label:"Watchlist",icon:Star},
   {href:"/insights",label:"Insights",icon:PieChart},
-  {href:"/intelligence",label:"Memo",icon:Brain},
+  {href:"/intelligence",label:"Mimo",icon:Mimo},
   {href:"/performance",label:"Performance",icon:BarChart3},
   {href:"/settings",label:"Settings",icon:Settings}
 ];
@@ -26,12 +27,12 @@ const MOBILE_NAV=[
   {href:"/today",label:"Today",icon:CalendarDays},
   {href:"/trades",label:"Trades",icon:CandlestickChart},
   {href:"/journal",label:"Journal",icon:Feather},
-  {href:"/intelligence",label:"Memo",icon:Brain}
+  {href:"/intelligence",label:"Mimo",icon:Mimo}
 ];
 const QUICK=[
   {href:"/trades?new=1",label:"Log trade",icon:CandlestickChart},
   {href:"/journal?new=1",label:"Write",icon:Feather},
-  {href:"/intelligence",label:"Memo",icon:Brain},
+  {href:"/intelligence",label:"Mimo",icon:Mimo},
   {href:"/performance",label:"Performance",icon:BarChart3}
 ];
 
@@ -77,9 +78,9 @@ export function AppShell({user,children}:{user:User;children:ReactNode}){
 
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/94 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary mobile navigation">
       <div className="relative mx-auto grid max-w-xl grid-cols-5">
-        <div className="col-span-2 grid grid-cols-2">{MOBILE_NAV.slice(0,2).map(item=>{const active=isActive(item.href);return <Link key={item.href} href={item.href} className="relative flex min-h-16 flex-col items-center justify-center gap-1 py-2">{active&&<motion.span layoutId="mnav-left" className="absolute top-0 h-0.5 w-8 rounded-full bg-brand" transition={{type:"spring",bounce:.18,duration:.42}}/>}<motion.span whileTap={{scale:.78}} className="flex"><item.icon className={cn("h-[19px] w-[19px]",active?"text-brand":"text-faint")} strokeWidth={active?2.15:1.85}/></motion.span><span className={cn("text-[9px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>})}</div>
+        <div className="col-span-2 grid grid-cols-2">{MOBILE_NAV.slice(0,2).map(item=>{const active=isActive(item.href);return <Link key={item.href} href={item.href} className="relative flex min-h-16 flex-col items-center justify-center gap-1 py-2">{active&&<motion.span layoutId="mnav-left" className="absolute top-0 h-0.5 w-8 rounded-full bg-brand" transition={{type:"spring",bounce:.18,duration:.42}}/>}<motion.span whileTap={{scale:.78}} className="flex"><item.icon className={cn("h-[22px] w-[22px]",active?"text-brand":"text-faint")} strokeWidth={active?2.15:1.85}/></motion.span><span className={cn("text-[9px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>})}</div>
         <div className="relative flex items-center justify-center"><motion.button whileTap={{scale:.9}} animate={quickOpen?{rotate:45}:{rotate:0}} transition={{type:"spring",stiffness:420,damping:24}} onClick={()=>setQuickOpen(v=>!v)} aria-label={quickOpen?"Close quick actions":"Open quick actions"} className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-paper bg-brandsolid text-brandon shadow-lg shadow-black/10"><Plus className="h-6 w-6" strokeWidth={2.25}/></motion.button></div>
-        <div className="col-span-2 grid grid-cols-2">{MOBILE_NAV.slice(2,4).map(item=>{const active=isActive(item.href);return <Link key={item.href} href={item.href} className="relative flex min-h-16 flex-col items-center justify-center gap-1 py-2">{active&&<motion.span layoutId="mnav-right" className="absolute top-0 h-0.5 w-8 rounded-full bg-brand" transition={{type:"spring",bounce:.18,duration:.42}}/>}<motion.span whileTap={{scale:.78}} className="flex"><item.icon className={cn("h-[19px] w-[19px]",active?"text-brand":"text-faint")} strokeWidth={active?2.15:1.85}/></motion.span><span className={cn("text-[9px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>})}</div>
+        <div className="col-span-2 grid grid-cols-2">{MOBILE_NAV.slice(2,4).map(item=>{const active=isActive(item.href);return <Link key={item.href} href={item.href} className="relative flex min-h-16 flex-col items-center justify-center gap-1 py-2">{active&&<motion.span layoutId="mnav-right" className="absolute top-0 h-0.5 w-8 rounded-full bg-brand" transition={{type:"spring",bounce:.18,duration:.42}}/>}<motion.span whileTap={{scale:.78}} className="flex"><item.icon className={cn("h-[22px] w-[22px]",active?"text-brand":"text-faint")} strokeWidth={active?2.15:1.85}/></motion.span><span className={cn("text-[9px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>})}</div>
       </div>
     </nav>
     <div className="sr-only" aria-live="polite"><ShieldCheck/></div>
