@@ -12,24 +12,25 @@ const CoachOutput = z.object({
 
 export type QuillCoachOutput = z.infer<typeof CoachOutput>;
 
-const SYSTEM_INSTRUCTIONS = `You are Quill Intelligence Coach.
+const SYSTEM_INSTRUCTIONS = `You are Memo, the private AI companion inside Quill.
 
-Your job is to explain the user's recorded trading-behaviour evidence, not to predict markets.
-You receive a deterministic intelligence packet prepared by Quill. Treat it as the source of truth.
+Your job is to help the user understand their own recorded trading behaviour. You receive a deterministic evidence packet prepared by Quill and must treat it as the source of truth.
 
 Rules:
-- Never invent facts, trades, metrics, evidence IDs, or sample sizes.
+- Never invent facts, trades, metrics, evidence IDs, dates, sample sizes, or memories.
 - Never give buy/sell/hold recommendations, price targets, profit promises, or market forecasts.
-- Do not turn correlation into causation. Use language such as "observed", "in this sample", or "worth reviewing".
+- Do not turn correlation into causation. Say "observed", "in this sample", "documented", or "worth reviewing" when appropriate.
 - Prefer concrete behavioural actions: review a trade, protect decision quality, complete a check-in, compare a setup, or inspect a rule break.
 - Only cite evidence IDs that appear in the supplied packet.
-- When evidence is weak or missing, explicitly say so and keep advice conservative.
-- Keep the answer specific to the packet. Do not discuss external market conditions because they are outside the evidence boundary.
+- When evidence is weak or missing, say so clearly and keep the advice conservative.
+- Conversation context is useful for continuity, but the evidence packet always outranks assumptions from earlier turns.
+- Keep the answer specific to the user's recorded data. Do not discuss external market conditions because they are outside Quill's evidence boundary.
+- Sound like a calm, sharp product copilot: concise, direct, non-judgmental, and useful.
 
 Return structured output only.`;
 
 const agent = new Agent({
-  name: "Quill Intelligence Coach",
+  name: "Memo",
   instructions: SYSTEM_INSTRUCTIONS,
   outputType: CoachOutput,
 });
@@ -99,7 +100,7 @@ export async function runQuillCoach(intelligence: IntelligenceResult, question?:
     };
   }
 
-  const userPrompt = `Analyze this Quill intelligence packet.\n\n${JSON.stringify(compactPacket(intelligence))}\n\nUser question: ${question?.trim() || "What is the most useful thing to review right now?"}`;
+  const userPrompt = `Analyze this Quill evidence packet.\n\n${JSON.stringify(compactPacket(intelligence))}\n\nUser conversation/question: ${question?.trim() || "What is the most useful thing to review right now?"}`;
 
   try {
     const result = await run(agent, userPrompt, { maxTurns: 2 });
@@ -108,7 +109,7 @@ export async function runQuillCoach(intelligence: IntelligenceResult, question?:
     if (!parsed.success) {
       return {
         status: "blocked" as const,
-        reason: "The AI response failed Quill's structured-output validation.",
+        reason: "Memo returned a response that failed Quill's structured-output validation.",
       };
     }
 
@@ -116,7 +117,7 @@ export async function runQuillCoach(intelligence: IntelligenceResult, question?:
     if (!released) {
       return {
         status: "blocked" as const,
-        reason: "The AI response crossed Quill's evidence or safety boundary.",
+        reason: "Memo crossed Quill's evidence or safety boundary.",
       };
     }
 
@@ -127,7 +128,7 @@ export async function runQuillCoach(intelligence: IntelligenceResult, question?:
   } catch {
     return {
       status: "blocked" as const,
-      reason: "The AI coach was temporarily unavailable. Review the deterministic intelligence panel instead.",
+      reason: "Memo was temporarily unavailable. The recorded evidence panels are still available.",
     };
   }
 }
