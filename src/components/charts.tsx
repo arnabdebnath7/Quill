@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { animate, motion, useInView } from "framer-motion";
+import { EASE } from "@/lib/motion";
 
 /* Animated number that tweens between values */
 export function AnimatedNumber({
@@ -18,7 +19,7 @@ export function AnimatedNumber({
   useEffect(() => {
     const controls = animate(prev.current, value, {
       duration: 0.9,
-      ease: [0.22, 1, 0.36, 1],
+      ease: EASE,
       onUpdate: (v) => setDisplay(v),
     });
     prev.current = value;
@@ -104,12 +105,11 @@ export function AreaChart({
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" style={{ height }}>
         <defs>
           <linearGradient id={`g${uid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+            <stop offset="0%" stopColor={color} stopOpacity="0.2" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        {/* zero line */}
-        <line x1={PAD_X} x2={W - PAD_X} y1={zeroY} y2={zeroY} stroke="var(--line-strong)" strokeDasharray="3 5" strokeWidth="1" />
+        <line x1={PAD_X} x2={W - PAD_X} y1={zeroY} y2={zeroY} stroke="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" strokeDasharray="3 5" strokeWidth="1" />
         {area && (
           <motion.path
             d={area}
@@ -128,19 +128,19 @@ export function AreaChart({
             strokeLinecap="round"
             initial={{ pathLength: 0 }}
             animate={inView ? { pathLength: 1 } : {}}
-            transition={{ duration: 1.4, ease: [0.65, 0, 0.35, 1] }}
+            transition={{ duration: 1.4, ease: EASE }}
           />
         )}
         {hover != null && pts[hover] && (
           <g>
-            <line x1={pts[hover].x} x2={pts[hover].x} y1={PAD_TOP} y2={H - PAD_BOTTOM} stroke="var(--line-strong)" strokeWidth="1" />
+            <line x1={pts[hover].x} x2={pts[hover].x} y1={PAD_TOP} y2={H - PAD_BOTTOM} stroke="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" strokeWidth="1" />
             <circle cx={pts[hover].x} cy={pts[hover].y} r="4.5" fill="var(--card)" stroke={color} strokeWidth="2.4" />
           </g>
         )}
       </svg>
       {hover != null && data[hover] && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-[11px] shadow-md"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg border border-border bg-popover px-2.5 py-1.5 text-[11px] shadow-md"
           style={{
             left: `${(pts[hover].x / W) * 100}%`,
             top: (pts[hover].y / H) * height - 10,
@@ -149,10 +149,10 @@ export function AreaChart({
           <div className="font-medium tabular" style={{ color }}>
             {formatY ? formatY(data[hover].value) : data[hover].value.toFixed(2)}
           </div>
-          <div className="text-faint">{formatX ? formatX(hover) : data[hover].label}</div>
+          <div className="text-muted-foreground">{formatX ? formatX(hover) : data[hover].label}</div>
         </div>
       )}
-      <div className="mt-1 flex justify-between px-1 text-[10px] text-faint">
+      <div className="mt-1 flex justify-between px-1 text-[10px] text-muted-foreground">
         <span>{formatX ? formatX(0) : data[0]?.label}</span>
         <span>{formatX ? formatX(data.length - 1) : data[data.length - 1]?.label}</span>
       </div>
@@ -165,10 +165,12 @@ export function Donut({
   parts,
   size = 150,
   thickness = 16,
+  centerLabel,
 }: {
   parts: { label: string; value: number; color: string }[];
   size?: number;
   thickness?: number;
+  centerLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
@@ -180,6 +182,7 @@ export function Donut({
   return (
     <div ref={ref} className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="var(--muted)" strokeWidth={thickness} />
         {parts.map((p) => {
           const frac = p.value / total;
           const dash = frac * C;
@@ -205,7 +208,7 @@ export function Donut({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-display text-2xl font-semibold tabular">{parts.length}</span>
-        <span className="text-[10px] uppercase tracking-widest text-faint">markets</span>
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{centerLabel ?? "markets"}</span>
       </div>
     </div>
   );
@@ -231,16 +234,16 @@ export function HBars({
         return (
           <div key={d.label} className="grid gap-1">
             <div className="flex items-baseline justify-between text-[12.5px]">
-              <span className="text-sub">{d.label}</span>
-              <span className={cnNum(pos)}>{format ? format(d.value) : d.value.toFixed(0)}</span>
+              <span className="text-muted-foreground">{d.label}</span>
+              <span className={`font-medium tabular ${pos ? "text-up" : "text-down"}`}>{format ? format(d.value) : d.value.toFixed(0)}</span>
             </div>
-            <div className="relative h-1.5 overflow-hidden rounded-full bg-line/50">
+            <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
               <motion.div
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{ background: pos ? "var(--up)" : "var(--down)", width: `${w}%` }}
                 initial={{ x: "-101%" }}
                 animate={inView ? { x: 0 } : {}}
-                transition={{ duration: 0.7, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.7, delay: i * 0.06, ease: EASE }}
               />
             </div>
           </div>
@@ -248,10 +251,6 @@ export function HBars({
       })}
     </div>
   );
-}
-
-function cnNum(pos: boolean) {
-  return `font-medium tabular ${pos ? "text-up" : "text-down"}`;
 }
 
 /* ---------------- Sparkline ---------------- */
@@ -278,7 +277,7 @@ export function Sparkline({ points, width = 96, height = 28, up }: { points: num
 }
 
 /* ---------------- Win-rate ring ---------------- */
-export function WinRing({ rate, size = 120 }: { rate: number; size?: number }) {
+export function WinRing({ rate, size = 120, label = "win rate" }: { rate: number; size?: number; label?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true });
   const R = (size - 12) / 2;
@@ -286,7 +285,7 @@ export function WinRing({ rate, size = 120 }: { rate: number; size?: number }) {
   return (
     <div ref={ref} className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="var(--line)" strokeWidth="9" />
+        <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="var(--muted)" strokeWidth="9" />
         <motion.circle
           cx={size / 2}
           cy={size / 2}
@@ -298,12 +297,12 @@ export function WinRing({ rate, size = 120 }: { rate: number; size?: number }) {
           strokeDasharray={C}
           initial={{ strokeDashoffset: C }}
           animate={inView ? { strokeDashoffset: C * (1 - rate / 100) } : {}}
-          transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 1.2, ease: EASE }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <AnimatedNumber value={rate} format={(n) => `${n.toFixed(0)}%`} className="font-display text-2xl font-semibold tabular" />
-        <span className="text-[9.5px] uppercase tracking-widest text-faint">win rate</span>
+        <span className="text-[9.5px] uppercase tracking-widest text-muted-foreground">{label}</span>
       </div>
     </div>
   );

@@ -21,8 +21,9 @@ export async function POST(request: Request) {
   const checkinCutoff = new Date();
   checkinCutoff.setDate(checkinCutoff.getDate() - 120);
 
+  // Bound the evidence packet the coach sees (mirrors /api/intelligence).
   const [userTrades, checkins, journals] = await Promise.all([
-    db.select().from(trades).where(eq(trades.userId, user.id)).orderBy(desc(trades.entryAt)),
+    db.select().from(trades).where(eq(trades.userId, user.id)).orderBy(desc(trades.entryAt)).limit(400),
     db
       .select()
       .from(dailyCheckins)
@@ -32,8 +33,9 @@ export async function POST(request: Request) {
           gte(dailyCheckins.date, checkinCutoff.toISOString().slice(0, 10)),
         ),
       )
-      .orderBy(desc(dailyCheckins.date)),
-    db.select().from(journalEntries).where(eq(journalEntries.userId, user.id)).orderBy(desc(journalEntries.createdAt)),
+      .orderBy(desc(dailyCheckins.date))
+      .limit(120),
+    db.select().from(journalEntries).where(eq(journalEntries.userId, user.id)).orderBy(desc(journalEntries.createdAt)).limit(200),
   ]);
 
   const intelligence = buildIntelligence({ trades: userTrades, checkins, journals });
