@@ -120,15 +120,13 @@ export function Mimo({ size = 42, compact = false, state = "idle", className }: 
             alt="Mimo"
             fill
             sizes={`${size}px`}
-            className="object-cover object-[50%_28%] brightness-[1.02]"
+            className="object-cover"
             onError={() => setFaceBroken(true)}
             unoptimized
           />
         ) : (
           <CssFace size={size} gaze={gaze} blink={blink} playful={activePlayful} thinking={state === "thinking"} />
         )}
-        {/* soft inner shading so the face reads as a portrait, not a sticker */}
-        <div className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(180deg,transparent_55%,color-mix(in_srgb,var(--background)_45%,transparent))]" />
       </div>
 
       {/* status badge */}
