@@ -19,6 +19,7 @@ import {
   UserRound,
   X,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import type { IntelligenceResult } from "@/lib/intelligence";
 import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
@@ -177,6 +178,12 @@ export default function MemoPage() {
     );
   }
 
+  const readinessMetrics: Array<[string, number | null, LucideIcon]> = [
+    ["Energy", data.readiness.energy, Zap],
+    ["Focus", data.readiness.focus, Target],
+    ["Sleep", data.readiness.sleepHours, Moon],
+  ];
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 pb-10">
       <motion.header initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[30px] border border-line bg-card p-5 shadow-[var(--shadow)] sm:p-7">
@@ -194,7 +201,7 @@ export default function MemoPage() {
       </motion.header>
 
       <section className="grid gap-4 lg:grid-cols-[1.5fr_0.75fr_0.75fr]">
-        <Card className="overflow-hidden border-brand/20 bg-brand-soft p-0"><div className="flex h-full flex-col justify-between p-5 sm:p-6"><div><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand"><Brain className="h-4 w-4" /> Your latest read</div><div className="mt-3 font-display text-[22px] font-semibold tracking-[-0.035em] sm:text-[26px]">{data.readiness.label}</div><p className="mt-2 max-w-2xl text-[11.5px] leading-relaxed text-sub">{data.readiness.mood ? `Mood: ${data.readiness.mood}. ` : ""}Energy {data.readiness.energy ?? "—"}/10 · Focus {data.readiness.focus ?? "—"}/10 · Sleep {data.readiness.sleepHours ?? "—"}h.</p></div><div className="mt-5 flex flex-wrap gap-2">{[["Energy", data.readiness.energy, Zap], ["Focus", data.readiness.focus, Target], ["Sleep", data.readiness.sleepHours, Moon]].map(([label, value, Icon]) => <div key={String(label)} className="inline-flex items-center gap-2 rounded-full border border-line bg-card/70 px-3 py-1.5 text-[10px] font-medium text-sub"><Icon className="h-3 w-3 text-brand" /> {String(label)} {value ?? "—"}</div>)}</div></div></Card>
+        <Card className="overflow-hidden border-brand/20 bg-brand-soft p-0"><div className="flex h-full flex-col justify-between p-5 sm:p-6"><div><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand"><Brain className="h-4 w-4" /> Your latest read</div><div className="mt-3 font-display text-[22px] font-semibold tracking-[-0.035em] sm:text-[26px]">{data.readiness.label}</div><p className="mt-2 max-w-2xl text-[11.5px] leading-relaxed text-sub">{data.readiness.mood ? `Mood: ${data.readiness.mood}. ` : ""}Energy {data.readiness.energy ?? "—"}/10 · Focus {data.readiness.focus ?? "—"}/10 · Sleep {data.readiness.sleepHours ?? "—"}h.</p></div><div className="mt-5 flex flex-wrap gap-2">{readinessMetrics.map(([label, value, Icon]) => <div key={label} className="inline-flex items-center gap-2 rounded-full border border-line bg-card/70 px-3 py-1.5 text-[10px] font-medium text-sub"><Icon className="h-3 w-3 text-brand" /> {label} {value ?? "—"}</div>)}</div></div></Card>
         <Card className="p-5 sm:p-6"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint"><TrendingUp className="h-4 w-4 text-up" /> This week</div><div className="mt-5 font-display text-[30px] font-semibold tracking-[-0.05em]">{data.weekly.pnl >= 0 ? "+" : "−"}{Math.abs(data.weekly.pnl).toFixed(2)}</div><div className="mt-1 text-[11px] text-sub">P&L · {data.weekly.trades} trades</div></Card>
         <Card className="p-5 sm:p-6"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint"><TrendingDown className="h-4 w-4 text-down" /> Risk surface</div><div className="mt-5 font-display text-[30px] font-semibold tracking-[-0.05em]">{data.risks.length}</div><div className="mt-1 text-[11px] text-sub">behavioural alerts open</div></Card>
       </section>
