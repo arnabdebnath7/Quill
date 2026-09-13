@@ -1,24 +1,48 @@
 "use client";
 
-import { useMemo } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ArrowUpRight,
-  BarChart3,
   Brain,
-  CheckCircle2,
-  DatabaseZap,
-  Fingerprint,
-  ShieldAlert,
+  Check,
+  Clipboard,
+  Moon,
+  RefreshCw,
+  Send,
+  ShieldCheck,
   Sparkles,
   Target,
+  TrendingDown,
+  TrendingUp,
+  UserRound,
+  X,
   Zap,
 } from "lucide-react";
 import type { IntelligenceResult } from "@/lib/intelligence";
 import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
+
+const STARTERS = [
+  { label: "Find my biggest leak", prompt: "Where is my biggest behavioural leak in the recorded data?" },
+  { label: "Read my readiness", prompt: "What does my latest readiness state suggest I should protect today?" },
+  { label: "What changed this week?", prompt: "What meaningfully changed in my trading behaviour this week?" },
+  { label: "Check sleep vs P&L", prompt: "What does my recorded data show about sleep and trade outcomes?" },
+];
+
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  coach?: {
+    headline: string;
+    summary: string;
+    actions: string[];
+    evidenceIds: string[];
+    safetyNote: string;
+  };
+};
 
 async function getIntelligence() {
   const res = await fetch("/api/intelligence");
@@ -27,51 +51,117 @@ async function getIntelligence() {
   return json.intelligence as IntelligenceResult;
 }
 
-function money(value: number) {
-  return `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2)}`;
+function prettyDate(value: string) {
+  if (!value || value === "unknown") return "Unknown date";
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-function toneClass(tone?: "positive" | "caution" | "neutral") {
-  if (tone === "positive") return "text-up";
-  if (tone === "caution") return "text-down";
-  return "text-sub";
-}
-
-function strengthCopy(strength?: "insufficient" | "emerging" | "useful") {
-  if (strength === "useful") return "Useful sample";
-  if (strength === "emerging") return "Emerging signal";
-  return "Insufficient sample";
-}
-
-export default function IntelligencePage() {
-  const { data, isLoading, isError } = useQuery({
+export default function MemoPage() {
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["intelligence"],
     queryFn: getIntelligence,
     staleTime: 60_000,
   });
 
-  const confidenceLabel = useMemo(() => {
-    if (!data) return "Building evidence";
-    if (data.confidence === "strong") return "Strong evidence base";
-    if (data.confidence === "building") return "Building evidence";
-    return "Early signal mode";
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [question, setQuestion] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [showSources, setShowSources] = useState(true);
+
+  const confidence = data?.confidence === "strong" ? "Strong evidence" : data?.confidence === "building" ? "Building evidence" : "Early signal";
+  const readinessTone = data?.readiness.score == null ? "text-sub" : data.readiness.score >= 60 ? "text-up" : "text-down";
+
+  const evidenceIndex = useMemo(() => {
+    const map = new Map<string, { symbol: string; date: string; detail: string; label: string }>();
+    data?.correlations.forEach((correlation) => {
+      correlation.evidence.forEach((point) => {
+        map.set(point.id, {
+          symbol: point.label,
+          date: point.date,
+          detail: point.detail,
+          label: correlation.label,
+        });
+      });
+    });
+    return map;
   }, [data]);
+
+  async function ask(prompt: string) {
+    const clean = prompt.trim();
+    if (!clean || busy || !data) return;
+
+    const previous = messages
+      .slice(-4)
+      .map((item) => `${item.role === "user" ? "User" : "Quill"}: ${item.content}`)
+      .join("\n");
+    const contextualQuestion = `${previous ? `${previous}\n` : ""}User: ${clean}`.slice(-500);
+
+    const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: clean };
+    setMessages((current) => [...current, userMessage]);
+    setQuestion("");
+    setBusy(true);
+
+    try {
+      const res = await fetch("/api/intelligence/coach", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: contextualQuestion }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? `Memo unavailable (${res.status})`);
+
+      const coach = json.coach;
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: coach.summary,
+        coach,
+      };
+      setMessages((current) => [...current, assistantMessage]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Memo is unavailable right now.";
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `${message}\n\nYour evidence panels are still available below the conversation.`,
+        },
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    void ask(question);
+  }
+
+  async function copyText(id: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(id);
+      window.setTimeout(() => setCopied(null), 1200);
+    } catch {
+      // Clipboard can be unavailable in embedded browsers; keep UI quiet.
+    }
+  }
 
   if (isLoading) {
     return (
-      <div className="space-y-5 pb-10">
-        <Skeleton className="h-56 rounded-3xl" />
-        <div className="grid gap-4 lg:grid-cols-4">
-          <Skeleton className="h-36" />
-          <Skeleton className="h-36" />
-          <Skeleton className="h-36" />
-          <Skeleton className="h-36" />
+      <div className="mx-auto w-full max-w-6xl space-y-5 pb-10">
+        <Skeleton className="h-44 rounded-[28px]" />
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr_0.8fr]">
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
         </div>
-        <Skeleton className="h-64" />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Skeleton className="h-80" />
-          <Skeleton className="h-80" />
-        </div>
+        <Skeleton className="h-[520px] rounded-[28px]" />
       </div>
     );
   }
@@ -80,62 +170,265 @@ export default function IntelligencePage() {
     return (
       <EmptyState
         icon={<Brain className="h-5 w-5" />}
-        title="Intelligence is unavailable"
-        body="Quill couldn't build this read right now. Your journal and trades remain untouched."
-        action={<Button onClick={() => window.location.reload()}>Try again</Button>}
+        title="Memo is unavailable"
+        body="Quill could not load the evidence context for Memo. Your journal and trades are untouched."
+        action={<Button onClick={() => void refetch()}><RefreshCw className="h-4 w-4" /> Try again</Button>}
       />
     );
   }
 
-  const score = data.readiness.score;
-  const circumference = 2 * Math.PI * 43;
-  const dash = score == null ? 0 : Math.max(0, Math.min(100, score)) / 100 * circumference;
-  const scoreColor = score == null ? "text-brand" : score >= 75 ? "text-up" : score >= 55 ? "text-brand" : "text-down";
-
   return (
-    <div className="space-y-7 pb-10">
-      <motion.header initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[28px] border border-line bg-card p-5 shadow-[var(--shadow)] sm:p-7">
-        <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-brand/12 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-up/5 blur-3xl" />
-        <div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto w-full max-w-6xl space-y-5 pb-10">
+      <motion.header
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-[30px] border border-line bg-card p-5 shadow-[var(--shadow)] sm:p-7"
+      >
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand/12 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-up/5 blur-3xl" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand"><Brain className="h-3.5 w-3.5" /> Intelligence · evidence only</div>
-            <h1 className="mt-3 max-w-3xl font-display text-[34px] font-semibold leading-[1.02] tracking-[-0.045em] sm:text-[48px]">See the pattern<br className="hidden sm:block" /> behind the pattern.</h1>
-            <p className="mt-4 max-w-2xl text-[13px] leading-relaxed text-sub sm:text-[14px]">Quill compares your recorded state with actual trade behaviour. No forecasts, no fake certainty — every signal shows the evidence behind it.</p>
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.19em] text-brand">
+              <Sparkles className="h-3.5 w-3.5" /> Memo · Quill AI
+            </div>
+            <h1 className="mt-3 max-w-2xl font-display text-[36px] font-semibold leading-[1.02] tracking-[-0.05em] sm:text-[50px]">
+              Talk to the memory<br className="hidden sm:block" /> of your trading.
+            </h1>
+            <p className="mt-4 max-w-2xl text-[13px] leading-relaxed text-sub sm:text-[14px]">
+              Ask natural-language questions about your own journals, check-ins and trades. Memo explains documented behaviour; it does not forecast markets or choose trades.
+            </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col lg:items-stretch">
-            <Link href="/intelligence/coach"><Button size="lg" className="w-full justify-center sm:w-auto lg:w-full"><Sparkles className="h-4 w-4" /> Ask Quill <ArrowUpRight className="h-3.5 w-3.5" /></Button></Link>
-            <Link href="/intelligence/lab"><Button variant="outline" size="lg" className="w-full justify-center sm:w-auto lg:w-full"><DatabaseZap className="h-4 w-4" /> Evidence lab</Button></Link>
+          <div className="flex shrink-0 items-center gap-2 rounded-2xl border border-line bg-paper/70 px-3 py-2.5 text-[10px] font-semibold text-faint">
+            <ShieldCheck className="h-4 w-4 text-brand" />
+            <span>{confidence}</span>
           </div>
         </div>
-        <div className="relative mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4 text-[10px] font-medium text-faint"><span>{data.sampleSize.trades} trades</span><span>·</span><span>{data.sampleSize.checkins} check-ins</span><span>·</span><span>{data.sampleSize.journals} journal entries</span><Badge tone="brand" className="ml-auto">{confidenceLabel}</Badge></div>
+        <div className="relative mt-6 grid gap-2 border-t border-line pt-4 text-[10px] font-medium text-faint sm:grid-cols-4">
+          <span>{data.sampleSize.trades} trades</span>
+          <span>{data.sampleSize.checkins} check-ins</span>
+          <span>{data.sampleSize.journals} journal entries</span>
+          <span className="sm:text-right">Readiness <span className={cn("font-semibold", readinessTone)}>{data.readiness.score ?? "—"}/100</span></span>
+        </div>
       </motion.header>
 
-      <section className="grid gap-4 lg:grid-cols-[1.05fr_1fr_1fr_1fr]">
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
-          <Card className="relative h-full overflow-hidden p-5 sm:p-6"><div className="absolute right-4 top-4 text-faint"><Zap className="h-4 w-4" /></div><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">Readiness</div><div className="mt-4 flex items-center gap-4"><div className="relative h-[94px] w-[94px] shrink-0"><svg viewBox="0 0 104 104" className="h-full w-full -rotate-90"><circle cx="52" cy="52" r="43" fill="none" stroke="currentColor" strokeWidth="7" className="text-line" /><circle cx="52" cy="52" r="43" fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round" className={scoreColor} strokeDasharray={`${dash} ${circumference}`} /></svg><div className="absolute inset-0 flex flex-col items-center justify-center"><span className="font-display text-[26px] font-semibold tracking-[-0.04em]">{score ?? "—"}</span><span className="text-[8px] font-semibold uppercase tracking-[0.1em] text-faint">/100</span></div></div><div className="min-w-0"><div className={cn("text-[12px] font-semibold", score != null && score < 60 ? "text-down" : "text-up")}>{data.readiness.label}</div><p className="mt-1 text-[11px] leading-relaxed text-sub">Your latest recorded state is ready for review.</p></div></div></Card>
-        </motion.div>
-        {[
-          ["Energy", data.readiness.energy, "/ 10"],
-          ["Focus", data.readiness.focus, "/ 10"],
-          ["Sleep", data.readiness.sleepHours, "h"],
-        ].map(([label, value, unit], index) => (
-          <motion.div key={String(label)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 + index * 0.04 }}>
-            <Card className="h-full p-5 sm:p-6"><div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-faint"><span>{label}</span><span className="text-brand">{index === 0 ? "STATE" : index === 1 ? "QUALITY" : "RECOVERY"}</span></div><div className="mt-6 font-display text-[34px] font-semibold tracking-[-0.05em]">{value == null ? "—" : value}<span className="ml-1 text-[12px] font-medium text-faint">{unit}</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line"><div className={cn("h-full rounded-full", index === 2 && typeof value === "number" && value < 6.5 ? "bg-down" : "bg-brand")} style={{ width: `${typeof value === "number" ? Math.max(4, Math.min(100, index === 2 ? value / 8 * 100 : value * 10)) : 4}%` }} /></div></Card>
-          </motion.div>
-        ))}
+      <section className="grid gap-4 lg:grid-cols-[1.5fr_0.75fr_0.75fr]">
+        <Card className="overflow-hidden border-brand/20 bg-brand-soft p-0">
+          <div className="flex h-full flex-col justify-between p-5 sm:p-6">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand">
+                <Brain className="h-4 w-4" /> Your latest read
+              </div>
+              <div className="mt-3 font-display text-[22px] font-semibold tracking-[-0.035em] sm:text-[26px]">
+                {data.readiness.label}
+              </div>
+              <p className="mt-2 max-w-2xl text-[11.5px] leading-relaxed text-sub">
+                {data.readiness.mood ? `Mood: ${data.readiness.mood}. ` : ""}
+                Energy {data.readiness.energy ?? "—"}/10 · Focus {data.readiness.focus ?? "—"}/10 · Sleep {data.readiness.sleepHours ?? "—"}h.
+              </p>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {[
+                ["Energy", data.readiness.energy, Zap],
+                ["Focus", data.readiness.focus, Target],
+                ["Sleep", data.readiness.sleepHours, Moon],
+              ].map(([label, value, Icon]) => (
+                <div key={String(label)} className="inline-flex items-center gap-2 rounded-full border border-line bg-card/70 px-3 py-1.5 text-[10px] font-medium text-sub">
+                  <Icon className="h-3 w-3 text-brand" /> {String(label)} {value ?? "—"}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint"><TrendingUp className="h-4 w-4 text-up" /> This week</div>
+          <div className="mt-5 font-display text-[30px] font-semibold tracking-[-0.05em]">{data.weekly.pnl >= 0 ? "+" : "−"}{Math.abs(data.weekly.pnl).toFixed(2)}</div>
+          <div className="mt-1 text-[11px] text-sub">P&L · {data.weekly.trades} trades</div>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint"><TrendingDown className="h-4 w-4 text-down" /> Risk surface</div>
+          <div className="mt-5 font-display text-[30px] font-semibold tracking-[-0.05em]">{data.risks.length}</div>
+          <div className="mt-1 text-[11px] text-sub">behavioural alerts open</div>
+        </Card>
       </section>
 
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="relative overflow-hidden rounded-[24px] border border-brand/35 bg-brand-soft p-5 sm:p-6"><div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-brand/10 blur-3xl" /><div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div className="max-w-3xl"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-brand"><Target className="h-3.5 w-3.5" /> Your next action</div><h2 className="mt-2 font-display text-[24px] font-semibold tracking-[-0.035em] sm:text-[29px]">{data.nextActions[0] ?? "Keep the next decision evidence-led."}</h2><p className="mt-2 text-[12px] leading-relaxed text-sub">One focused behaviour is more useful than a page of generic advice. This recommendation comes from the evidence Quill can actually support.</p></div><div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col"><Link href="/intelligence/coach"><Button size="lg" className="min-w-[170px]">Commit to the rule <ArrowUpRight className="h-4 w-4" /></Button></Link><Link href="/intelligence/lab"><Button variant="outline" size="lg" className="min-w-[170px]">See the evidence</Button></Link></div></div></motion.section>
+      <section className="overflow-hidden rounded-[30px] border border-line bg-card shadow-[var(--shadow)]">
+        <div className="flex flex-col gap-4 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div>
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-brand"><Sparkles className="h-3.5 w-3.5" /> Private AI conversation</div>
+            <h2 className="mt-1 font-display text-[22px] font-semibold tracking-[-0.03em]">Memo</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge tone="brand">Evidence-only</Badge>
+            {messages.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setMessages([])}><X className="h-3.5 w-3.5" /> Clear</Button>
+            )}
+          </div>
+        </div>
 
-      <section className="space-y-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><DatabaseZap className="h-4 w-4 text-brand" /><h2 className="font-display text-[22px] font-semibold tracking-[-0.03em]">Evidence lab</h2></div><p className="mt-1 text-[11.5px] text-faint">The strongest measurable relationships currently supported by your data.</p></div><div className="text-[9px] font-semibold uppercase tracking-[0.13em] text-faint">No prediction · no fake certainty</div></div>{data.correlations.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{data.correlations.slice(0, 6).map((item, index) => <motion.div key={`${item.label}-${item.headline}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + index * 0.04 }}><Card className="group h-full overflow-hidden p-0 transition-transform duration-200 hover:-translate-y-0.5"><div className="flex items-center justify-between border-b border-line px-5 py-4"><div className="flex items-center gap-2"><Fingerprint className={cn("h-4 w-4", toneClass(item.tone))} /><span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-faint">{item.label}</span></div><span className="rounded-full border border-line bg-paper px-2 py-1 font-mono text-[9px] text-faint">n={item.sampleSize}</span></div><div className="p-5"><h3 className="font-display text-[18px] font-semibold leading-snug tracking-[-0.025em]">{item.headline}</h3><p className="mt-2 text-[11.5px] leading-relaxed text-sub">{item.detail}</p><div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-paper p-3"><div className="text-[8px] font-semibold uppercase tracking-[0.12em] text-faint">Higher</div><div className="mt-1 text-[10.5px] font-medium text-sub">{item.higher}</div></div><div className="rounded-xl bg-paper p-3"><div className="text-[8px] font-semibold uppercase tracking-[0.12em] text-faint">Lower</div><div className="mt-1 text-[10.5px] font-medium text-sub">{item.lower}</div></div></div><div className="mt-4 flex items-center justify-between text-[8.5px] font-semibold uppercase tracking-[0.11em] text-faint"><span>{strengthCopy(item.strength)}</span><span className={toneClass(item.tone)}>{item.tone === "positive" ? "supports review" : item.tone === "caution" ? "watch closely" : "neutral"}</span></div></div></Card></motion.div>)}</div> : <Card className="p-6"><div className="font-display text-[17px] font-semibold">Not enough paired evidence yet.</div><p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-sub">Keep completing Today check-ins and closing trades with consistent reviews. Quill will only publish relationships it can actually support.</p></Card>}</section>
+        <div className="min-h-[360px] space-y-5 p-4 sm:min-h-[420px] sm:p-6">
+          {messages.length === 0 ? (
+            <div className="flex min-h-[330px] flex-col justify-between gap-8">
+              <div className="mx-auto w-full max-w-3xl pt-5 text-center sm:pt-10">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand/20 bg-brand-soft text-brand">
+                  <Brain className="h-6 w-6" />
+                </div>
+                <h3 className="mt-5 font-display text-[28px] font-semibold tracking-[-0.04em] sm:text-[34px]">What should Quill remember with you?</h3>
+                <p className="mx-auto mt-3 max-w-xl text-[12px] leading-relaxed text-faint sm:text-[13px]">
+                  Start from a suggestion or ask your own question. Memo will keep the answer tied to the records already inside Quill.
+                </p>
+              </div>
+              <div className="mx-auto grid w-full max-w-3xl gap-2 sm:grid-cols-2">
+                {STARTERS.map((starter) => (
+                  <button
+                    key={starter.label}
+                    type="button"
+                    onClick={() => void ask(starter.prompt)}
+                    className="group rounded-2xl border border-line bg-paper px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-brand/35 hover:bg-brand-soft"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-semibold text-sub">{starter.label}</span>
+                      <ArrowUpRight className="h-3.5 w-3.5 text-faint transition group-hover:text-brand" />
+                    </div>
+                    <p className="mt-1 text-[10.5px] leading-relaxed text-faint">{starter.prompt}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-4xl space-y-5">
+              {messages.map((message) => (
+                <motion.div key={message.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
+                  {message.role === "assistant" && (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand/20 bg-brand-soft text-brand"><Brain className="h-4 w-4" /></div>
+                  )}
+                  <div className={cn("max-w-[88%] rounded-3xl border px-4 py-3.5 sm:max-w-[82%]", message.role === "user" ? "border-brand/20 bg-brand text-brand-on" : "border-line bg-paper") }>
+                    {message.role === "user" ? (
+                      <p className="text-[12px] leading-relaxed">{message.content}</p>
+                    ) : message.coach ? (
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[9px] font-semibold uppercase tracking-[0.13em] text-brand">Evidence-grounded</div>
+                          <button type="button" aria-label="Copy answer" onClick={() => void copyText(message.id, `${message.coach?.headline}\n\n${message.coach?.summary}\n\n${message.coach?.actions.join("\n")}`)} className="rounded-lg p-1.5 text-faint transition hover:bg-card hover:text-sub">
+                            {copied === message.id ? <Check className="h-3.5 w-3.5 text-up" /> : <Clipboard className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                        <h3 className="mt-2 font-display text-[21px] font-semibold tracking-[-0.03em]">{message.coach.headline}</h3>
+                        <p className="mt-3 text-[12px] leading-relaxed text-sub">{message.coach.summary}</p>
+                        {message.coach.actions.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            {message.coach.actions.map((action, index) => (
+                              <div key={`${message.id}-${index}`} className="flex gap-3 rounded-2xl border border-line bg-card px-3.5 py-3">
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[9px] font-bold text-brand">{index + 1}</span>
+                                <p className="text-[11px] leading-relaxed text-sub">{action}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {message.coach.evidenceIds.length > 0 && (
+                          <div className="mt-4">
+                            <button type="button" onClick={() => setShowSources((current) => !current)} className="text-[9px] font-semibold uppercase tracking-[0.12em] text-faint transition hover:text-sub">
+                              {showSources ? "Hide evidence" : "Show evidence"} · {message.coach.evidenceIds.length}
+                            </button>
+                            {showSources && (
+                              <div className="mt-2 space-y-2">
+                                {message.coach.evidenceIds.slice(0, 4).map((id) => {
+                                  const source = evidenceIndex.get(id);
+                                  return source ? (
+                                    <div key={id} className="rounded-2xl border border-line bg-card px-3.5 py-3">
+                                      <div className="flex items-center justify-between gap-3 text-[9px] font-semibold uppercase tracking-[0.11em] text-faint">
+                                        <span>{source.label}</span><span>{source.symbol} · {prettyDate(source.date)}</span>
+                                      </div>
+                                      <p className="mt-1.5 text-[10.5px] leading-relaxed text-sub">{source.detail}</p>
+                                    </div>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="mt-4 border-t border-line pt-3 text-[9.5px] leading-relaxed text-faint">{message.coach.safetyNote}</div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-sub">{message.content}</p>
+                    )}
+                  </div>
+                  {message.role === "user" && (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-line bg-paper text-faint"><UserRound className="h-4 w-4" /></div>
+                  )}
+                </motion.div>
+              ))}
+              {busy && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-brand/20 bg-brand-soft text-brand"><Brain className="h-4 w-4" /></div>
+                  <div className="rounded-2xl border border-line bg-paper px-4 py-3 text-[10px] text-faint">Memo is reading your recorded evidence…</div>
+                </motion.div>
+              )}
+            </div>
+          )}
+        </div>
 
-      <section className="grid gap-4 lg:grid-cols-2"><Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b border-line px-5 py-4"><div><div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-down" /><h2 className="font-display text-[18px] font-semibold">Behavioural alerts</h2></div><p className="mt-1 text-[10.5px] text-faint">Signals worth reviewing before the next session.</p></div><Badge tone="down">{data.risks.length} open</Badge></div><div className="space-y-3 p-4 sm:p-5">{data.risks.length ? data.risks.slice(0, 4).map((item) => <div key={`${item.label}-${item.value}`} className="rounded-2xl border border-down/20 bg-down/5 p-4"><div className="flex items-center justify-between gap-3"><div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint">{item.label}</div>{item.sampleSize != null && <div className="font-mono text-[9px] text-faint">n={item.sampleSize}</div>}</div><div className="mt-1 font-display text-[17px] font-semibold text-down">{item.value}</div><p className="mt-1.5 text-[11px] leading-relaxed text-sub">{item.detail}</p></div>) : <div className="rounded-2xl bg-paper p-4 text-[11.5px] leading-relaxed text-faint">No high-signal risk pattern crossed Quill's threshold.</div>}</div></Card>
-        <Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b border-line px-5 py-4"><div><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-brand" /><h2 className="font-display text-[18px] font-semibold">Weekly tape</h2></div><p className="mt-1 text-[10.5px] text-faint">Your recorded week, stripped of noise.</p></div><Link href="/performance" className="text-[9px] font-semibold uppercase tracking-[0.11em] text-brand">Performance ↗</Link></div><div className="grid grid-cols-2 gap-px bg-line"><div className="bg-card p-5"><div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-faint">P&L</div><div className="mt-2 font-display text-[29px] font-semibold tracking-[-0.05em]">{money(data.weekly.pnl)}</div><div className="mt-1 text-[10px] text-faint">{data.weekly.trades} closed trades</div></div><div className="bg-card p-5"><div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-faint">Win rate</div><div className="mt-2 font-display text-[29px] font-semibold tracking-[-0.05em]">{data.weekly.winRate == null ? "—" : `${Math.round(data.weekly.winRate)}%`}</div><div className="mt-1 text-[10px] text-faint">Previous: {money(data.weekly.previousPnl)}</div></div></div><div className="p-5"><div className="flex items-center justify-between rounded-2xl bg-paper p-4"><div><div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-faint">Week delta</div><div className="mt-1 text-[12px] text-sub">Compared with the previous 7 days</div></div>{data.weekly.deltaPnl != null && <div className={cn("font-mono text-[12px] font-semibold", data.weekly.deltaPnl >= 0 ? "text-up" : "text-down")}>{data.weekly.deltaPnl >= 0 ? "↑" : "↓"} {money(Math.abs(data.weekly.deltaPnl))}</div>}</div></div></Card></section>
+        <form onSubmit={submit} className="border-t border-line bg-paper/55 p-3 sm:p-4">
+          <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-3xl border border-line bg-card p-2 shadow-sm focus-within:border-brand/40">
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void ask(question);
+                }
+              }}
+              rows={1}
+              maxLength={500}
+              placeholder="Ask Memo about your patterns…"
+              className="min-h-[46px] flex-1 resize-none bg-transparent px-3 py-3 text-[12px] outline-none placeholder:text-faint"
+              aria-label="Ask Memo"
+            />
+            <Button type="submit" size="icon" disabled={busy || !question.trim()} className="h-11 w-11 shrink-0 rounded-2xl" aria-label="Send question">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="mx-auto mt-2 flex max-w-4xl items-center justify-between gap-3 px-2 text-[9px] text-faint">
+            <span>Enter to send · Shift+Enter for a new line</span>
+            <span>{question.length}/500</span>
+          </div>
+        </form>
+      </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]"><Card className="p-5 sm:p-6"><div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-brand" /><h2 className="font-display text-[18px] font-semibold">What Quill sees</h2></div><p className="mt-1 text-[10.5px] text-faint">Observed from recorded behaviour, not market forecasts.</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{data.observations.slice(0, 6).map((item) => <div key={item.label} className="rounded-2xl border border-line bg-paper/55 p-4"><div className="flex items-center justify-between gap-3"><span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-faint">{item.label}</span><span className={cn("font-display text-[17px] font-semibold", toneClass(item.tone))}>{item.value}</span></div><p className="mt-1.5 text-[11px] leading-relaxed text-sub">{item.detail}</p>{item.sampleSize != null && <div className="mt-2 font-mono text-[8.5px] text-faint">n={item.sampleSize} · {strengthCopy(item.strength)}</div>}</div>)}</div></Card><div className="space-y-4"><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Target className="h-4 w-4 text-brand" /><h2 className="font-display text-[18px] font-semibold">Documented edge</h2></div><Link href="/insights" className="text-[9px] font-semibold uppercase tracking-[0.11em] text-brand">Open ↗</Link></div><div className="mt-4 space-y-3">{data.edge.length ? data.edge.slice(0, 3).map((item) => <div key={`${item.label}-${item.value}`} className="rounded-2xl bg-paper p-4"><div className="flex items-center justify-between gap-3"><div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-faint">{item.label}</div>{item.sampleSize != null && <div className="font-mono text-[8.5px] text-faint">n={item.sampleSize}</div>}</div><div className={cn("mt-1 font-display text-[18px] font-semibold", toneClass(item.tone))}>{item.value}</div><p className="mt-1 text-[10.5px] leading-relaxed text-sub">{item.detail}</p></div>) : <p className="text-[11px] leading-relaxed text-faint">Quill needs repeated evidence before calling something a documented edge.</p>}</div></Card><div className="rounded-2xl border border-line bg-paper p-4"><div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-brand"><Sparkles className="h-3.5 w-3.5" /> AI boundary</div><p className="mt-2 text-[11px] leading-relaxed text-sub">Quill Coach can explain this evidence in plain language. It is constrained to your recorded packet and does not issue trade recommendations.</p><Link href="/intelligence/coach" className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-brand">Open Coach <ArrowUpRight className="h-3 w-3" /></Link></div></div></section>
+      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div><div className="text-[9px] font-semibold uppercase tracking-[0.13em] text-brand">Strongest signal</div><h3 className="mt-1 font-display text-[20px] font-semibold tracking-[-0.03em]">Evidence already found</h3></div>
+            <Button asChild variant="outline" size="sm"><a href="/intelligence/lab">Open lab <ArrowUpRight className="h-3.5 w-3.5" /></a></Button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {data.correlations.slice(0, 3).map((item) => (
+              <div key={item.id} className="rounded-2xl border border-line bg-paper p-3.5">
+                <div className="flex items-center justify-between gap-3"><span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-faint">{item.label}</span><span className="font-mono text-[9px] text-faint">n={item.sampleSize}</span></div>
+                <div className="mt-1.5 text-[12px] font-semibold text-sub">{item.headline}</div>
+                <p className="mt-1 text-[10.5px] leading-relaxed text-faint">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
 
-      <footer className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-faint">Keep feeding the signal</div><p className="mt-1 text-[11px] leading-relaxed text-sub">Pre-trade plans, state check-ins, rule adherence and honest reviews make future intelligence more specific.</p></div><div className="flex gap-2"><Link href="/today"><Button variant="outline" size="sm">Today</Button></Link><Link href="/intelligence/coach"><Button size="sm">Ask Quill <Sparkles className="h-3.5 w-3.5" /></Button></Link></div></footer>
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.13em] text-brand"><RefreshCw className="h-3.5 w-3.5" /> Context</div>
+          <h3 className="mt-1 font-display text-[20px] font-semibold tracking-[-0.03em]">What Memo can read</h3>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {[
+              ["Trades", data.sampleSize.trades],
+              ["Check-ins", data.sampleSize.checkins],
+              ["Journals", data.sampleSize.journals],
+              ["Alerts", data.risks.length],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-2xl bg-paper p-3.5"><div className="text-[9px] uppercase tracking-[0.1em] text-faint">{label}</div><div className="mt-1 font-display text-[24px] font-semibold">{value}</div></div>
+            ))}
+          </div>
+        </Card>
+      </section>
     </div>
   );
 }
