@@ -6,7 +6,15 @@ import { motion, useReducedMotion } from "framer-motion";
 
 export type MimoState = "idle" | "thinking" | "celebrate" | "hallucinating";
 
-export function Mimo({ size = 42, compact = false, state = "idle" }: { size?: number; compact?: boolean; state?: MimoState }) {
+type MimoProps = {
+  size?: number;
+  compact?: boolean;
+  state?: MimoState;
+  className?: string;
+  strokeWidth?: number;
+};
+
+export function Mimo({ size = 42, compact = false, state = "idle", className }: MimoProps) {
   const reduceMotion = useReducedMotion();
   const [gaze, setGaze] = useState({ x: 0, y: 0 });
   const [blink, setBlink] = useState(false);
@@ -71,7 +79,7 @@ export function Mimo({ size = 42, compact = false, state = "idle" }: { size?: nu
 
   return (
     <motion.div
-      className="relative inline-flex shrink-0 items-center justify-center select-none"
+      className={`relative inline-flex shrink-0 items-center justify-center select-none ${className ?? ""}`}
       style={{ width: face, height: face }}
       animate={reduceMotion ? undefined : activePlayful ? { rotate: [0, -3, 3, -2, 0], y: [0, -1, 1, -2, 0] } : { y: [0, -1.5, 0] }}
       transition={activePlayful ? { duration: 1.2, ease: "easeInOut" } : { duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
