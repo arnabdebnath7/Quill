@@ -1,5 +1,6 @@
 "use client";
 
+import { getApp, getApps, initializeApp, FirebaseError } from "firebase/app";
 import {
   getAuth,
   getRedirectResult,
@@ -28,7 +29,7 @@ setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
-const appleProvider = new AppleAuthProvider();
+
 
 // Analytics only where it can actually run.
 if (typeof window !== "undefined") {
