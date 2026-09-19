@@ -5,17 +5,9 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
 import { ThemeToggle } from "@/components/app-shell";
-import { consumeRedirectResult, signInWithApple, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
+import { consumeRedirectResult, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
 
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-current" aria-hidden>
-      <path d="M17.05 12.55c-.02-2.04 1.67-3.02 1.75-3.07a3.76 3.76 0 0 0-2.95-1.6c-1.25-.13-2.46.75-3.1.75-.65 0-1.64-.73-2.7-.71-1.39.02-2.67.81-3.38 2.04-1.45 2.51-.37 6.2 1.02 8.23.69.99 1.5 2.1 2.57 2.06 1.03-.04 1.42-.66 2.67-.66 1.24 0 1.6.66 2.69.64 1.11-.02 1.82-1 2.5-2 .79-1.15 1.11-2.27 1.13-2.33-.03-.01-2.17-.83-2.2-3.35ZM15.01 6.55c.56-.68.94-1.63.83-2.57-.8.03-1.76.53-2.33 1.2-.51.59-.96 1.55-.84 2.47.89.07 1.78-.45 2.34-1.1Z"/>
-    </svg>
-  );
-}
-
-function GoogleMark() {
+function AppleMark() {\n  return (\n    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-current" aria-hidden>\n      <path d="M17.05 12.55c-.02-2.04 1.67-3.02 1.75-3.07a3.76 3.76 0 0 0-2.95-1.6c-1.25-.13-2.46.75-3.1.75-.65 0-1.64-.73-2.7-.71-1.39.02-2.67.81-3.38 2.04-1.45 2.51-.37 6.2 1.02 8.23.69.99 1.5 2.1 2.57 2.06 1.03-.04 1.42-.66 2.67-.66 1.24 0 1.6.66 2.69.64 1.11-.02 1.82-1 2.5-2 .79-1.15 1.11-2.27 1.13-2.33-.03-.01-2.17-.83-2.2-3.35ZM15.01 6.55c.56-.68.94-1.63.83-2.57-.8.03-1.76.53-2.33 1.2-.51.59-.96 1.55-.84 2.47.89.07 1.78-.45 2.34-1.1Z"/>\n    </svg>\n  );\n}\n\nfunction GoogleMark() {
   return (
     <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
       <path fill="#4285F4" d="M23.5 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.09 3.57-5.16 3.57-8.81Z" />
@@ -132,7 +124,7 @@ function QuillIllustration() {
 
 export function LoginClient() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "google" | "apple" | "guest" | "exchange">("idle");
+  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange">("idle");
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== "idle";
 
@@ -173,21 +165,6 @@ export function LoginClient() {
       dead = true;
     };
   }, [exchange]);
-
-  const signInApple = async () => {
-    setError(null);
-    setPhase("apple");
-    try {
-      await exchange(await signInWithApple());
-    } catch (e) {
-      if (e instanceof SignInCancelled) {
-        setPhase("idle");
-        return;
-      }
-      setError(e instanceof FirebaseError ? friendlyError(e) : e instanceof Error ? e.message : "Apple sign-in could not be completed. Please try again.");
-      setPhase("idle");
-    }
-  };
 
   const signIn = async () => {
     setError(null);
@@ -291,20 +268,12 @@ export function LoginClient() {
             </div>
 
             <button
-              onClick={signInApple}
-              disabled={busy}
-              className="flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_1px_4px_rgba(0,0,0,.04)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] hover:shadow-[0_2px_8px_rgba(0,0,0,.06)] active:scale-[0.98] disabled:opacity-60"
+              type="button"
+              disabled
+              className="flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] opacity-55 cursor-not-allowed"
             >
-              {phase === "apple" || phase === "exchange" ? (
-                <motion.span
-                  className="h-[18px] w-[18px] rounded-full border-2 border-[#1A1A1A]/20 border-t-[#1A1A1A]"
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-                />
-              ) : (
-                <AppleMark />
-              )}
-              {phase === "apple" ? "Waiting for Apple…" : phase === "exchange" ? "Opening your workspace…" : "Continue with Apple"}
+              <AppleMark />
+              Continue with Apple
             </button>
 
             <button
