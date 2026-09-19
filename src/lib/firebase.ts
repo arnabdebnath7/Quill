@@ -4,6 +4,7 @@ import { getApp, getApps, initializeApp, FirebaseError } from "firebase/app";
 import {
   getAuth,
   getRedirectResult,
+  AppleAuthProvider,
   GoogleAuthProvider,
   setPersistence,
   browserLocalPersistence,
@@ -29,6 +30,7 @@ setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
+const appleProvider = new AppleAuthProvider();
 
 // Analytics only where it can actually run.
 if (typeof window !== "undefined") {
@@ -71,7 +73,28 @@ export async function signInWithGoogle(): Promise<string> {
   }
 }
 
-/** Completes a redirect-based sign-in after the round trip to Google. */
+export async function signInWithApple(): Promise<string> {
+  try {
+    const res = await signInWithPopup(auth, appleProvider);
+    return await res.user.getIdToken();
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      if (
+        e.code === "auth/popup-blocked" ||
+        e.code === "auth/cancelled-popup-request" ||
+        e.code === "auth/operation-not-supported-in-this-environment" ||
+        e.code === "auth/web-storage-unsupported"
+      ) {
+        await signInWithRedirect(auth, appleProvider);
+        return new Promise<string>(() => {});
+      }
+      if (e.code === "auth/popup-closed-by-user") throw new SignInCancelled();
+    }
+    throw e;
+  }
+}
+
+/** Completes a redirect-based sign-in after the round trip to Google or Apple. */
 export async function consumeRedirectResult(): Promise<string | null> {
   const res = await getRedirectResult(auth);
   if (!res) return null;
