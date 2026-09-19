@@ -246,7 +246,7 @@ export function LoginClient() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
-            className="mt-10 space-y-3"
+            className="mt-10 flex flex-col gap-3"
           >
             <button
               onClick={signIn}
@@ -270,8 +270,6 @@ export function LoginClient() {
                 ? "Waiting for Apple…"
                 : "Continue with Google"}
             </button>
-
-
             <button
               type="button"
               onClick={signInWithAppleProvider}
