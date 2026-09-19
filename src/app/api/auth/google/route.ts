@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { verifyFirebaseIdToken } from "@/lib/firebase-admin";
 import { createSession } from "@/lib/auth";
 
@@ -19,31 +19,22 @@ export async function POST(request: Request) {
     }
 
     const decoded = await verifyFirebaseIdToken(idToken);
-    const firebaseUid = decoded.uid?.trim();
-    const email = decoded.email?.toLowerCase().trim() || null;
 
-    // The existing users table requires an email. Phone-only Firebase
-    // accounts therefore get a stable internal identity based on Firebase UID.
-    const accountEmail =
-      email ||
-      (firebaseUid ? `phone-${firebaseUid}@auth.quill.local` : null);
-
-    if (!accountEmail) {
+    const email = decoded.email?.toLowerCase().trim();
+    if (!email) {
       return NextResponse.json(
-        { error: "This Firebase account has no usable identity." },
+        { error: "This account has no email address." },
         { status: 400 }
       );
     }
 
     const name =
-      decoded.name?.trim() ||
-      (email ? email.split("@")[0] : null) ||
-      "Trader";
+      decoded.name?.trim() || email.split("@")[0] || "Trader";
 
     const [existing] = await db
       .select()
       .from(users)
-      .where(eq(users.email, accountEmail))
+      .where(eq(users.email, email))
       .limit(1);
 
     const user =
@@ -52,7 +43,7 @@ export async function POST(request: Request) {
         await db
           .insert(users)
           .values({
-            email: accountEmail,
+            email,
             name,
             image:
               typeof decoded.picture === "string"
