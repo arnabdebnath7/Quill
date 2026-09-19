@@ -312,10 +312,7 @@ export function LoginClient() {
                 Privacy Policy
               </a>
               .
-            </p>
-
-            <p className="pt-1 text-center text-[11px] text-[#C4C0B8]">No demo data. Your workspace starts clean.</p>
-          </motion.div>
+            </p>          </motion.div>
         </div>
       </div>
 
