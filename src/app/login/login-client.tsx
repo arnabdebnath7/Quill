@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ConfirmationResult, RecaptchaVerifier } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
@@ -163,13 +164,14 @@ export function LoginClient() {
   >("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const confirmationRef = useRef<Awaited<ReturnType<typeof sendPhoneVerificationCode>> | null>(null);
-  const recaptchaRef = useRef<ReturnType<typeof createPhoneRecaptchaVerifier> | null>(null);
+  const confirmationRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const lastRequestedPhoneRef = useRef("");
-  const webOtpAbortRef = useRef<AbortController | null>(null);
 
   const phoneBusy =
-    phonePhase === "sending" || phonePhase === "awaiting" || phonePhase === "verifying";
+    phonePhase === "sending" ||
+    phonePhase === "awaiting" ||
+    phonePhase === "verifying";
   const busy = phase !== "idle" || phoneBusy;
 
   const exchange = useCallback(
@@ -191,8 +193,6 @@ export function LoginClient() {
   );
 
   const resetPhoneVerifier = useCallback(() => {
-    webOtpAbortRef.current?.abort();
-    webOtpAbortRef.current = null;
     recaptchaRef.current?.clear();
     recaptchaRef.current = null;
   }, []);
@@ -236,25 +236,6 @@ export function LoginClient() {
         );
         confirmationRef.current = confirmation;
         setPhonePhase("awaiting");
-
-        // Best-effort Android/browser SMS autofill. Firebase still falls back
-        // to the normal OTP field when the browser cannot read the SMS.
-        if ("OTPCredential" in window) {
-          const controller = new AbortController();
-          webOtpAbortRef.current = controller;
-          try {
-            const credential = await (navigator.credentials as any).get({
-              otp: { transport: ["sms"] },
-              signal: controller.signal,
-            });
-            const code = typeof credential?.code === "string"
-              ? credential.code.replace(/\D/g, "").slice(0, 6)
-              : "";
-            if (code) setOtp(code);
-          } catch {
-            // Manual OTP entry remains available when WebOTP is unavailable.
-          }
-        }
       } catch (e) {
         setError(friendlyPhoneError(e));
         setPhonePhase("failed");
@@ -277,9 +258,13 @@ export function LoginClient() {
       return;
     }
 
+    const canRequest =
+      phonePhase === "idle" ||
+      (phonePhase === "failed" && lastRequestedPhoneRef.current !== phone);
+
     if (
       phase === "idle" &&
-      phonePhase === "idle" &&
+      canRequest &&
       lastRequestedPhoneRef.current !== phone
     ) {
       lastRequestedPhoneRef.current = phone;
@@ -310,7 +295,31 @@ export function LoginClient() {
       });
     return () => {
       dead = true;
-      webOtpAbortRef.current?.abort();
+      recaptchaRef.current?.clear();
+    };
+  }, [exchange]);
+
+  const signIn = async () => {
+    setError(null);
+    setPhase("google");
+    try {
+      await exchange(await signInWithGoogle());
+    } catch (e) {
+      if (e instanceof SignInCancelled) {
+        setPhase("idle");
+        return;
+      }
+      setError(friendlyError(e));
+      setPhase("idle");
+    }
+  };
+
+  const manualVerify = () => {
+    if (otp.length === 6) void verifyOtp(otp);
+  };
+
+  return () => {
+      dead = true;
       recaptchaRef.current?.clear();
     };
   }, [exchange]);
