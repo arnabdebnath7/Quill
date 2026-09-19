@@ -1,11 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
 import { ThemeToggle } from "@/components/app-shell";
-import { consumeRedirectResult, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
+import {
+  consumeRedirectResult,
+  createPhoneRecaptchaVerifier,
+  sendPhoneVerificationCode,
+  signInWithGoogle,
+  SignInCancelled,
+} from "@/lib/firebase";
 
 function GoogleMark() {
   return (
@@ -36,6 +42,31 @@ function friendlyError(e: unknown) {
     }
   }
   return e instanceof Error ? e.message : "Something went wrong. Please try again.";
+}
+
+function friendlyPhoneError(e: unknown) {
+  if (e instanceof FirebaseError) {
+    switch (e.code) {
+      case "auth/invalid-phone-number":
+        return "That mobile number is not valid. Enter a 10-digit Indian number.";
+      case "auth/invalid-verification-code":
+        return "That verification code is incorrect. Check the SMS and try again.";
+      case "auth/code-expired":
+        return "That verification code has expired. Enter the latest code.";
+      case "auth/too-many-requests":
+      case "auth/quota-exceeded":
+        return "Too many verification attempts. Please wait a while and try again.";
+      case "auth/captcha-check-failed":
+        return "Phone verification could not be completed. Please try again.";
+      case "auth/operation-not-allowed":
+        return "Phone sign-in is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+      case "auth/network-request-failed":
+        return "Network hiccup reaching phone verification. Check your connection and retry.";
+      default:
+        return `Phone verification failed (${e.code.replace("auth/", "")}).`;
+    }
+  }
+  return e instanceof Error ? e.message : "Phone verification failed. Please try again.";
 }
 
 function QuillIllustration() {
@@ -126,8 +157,20 @@ export function LoginClient() {
   const router = useRouter();
   const [phase, setPhase] = useState<"idle" | "google" | "exchange">("idle");
   const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [phonePhase, setPhonePhase] = useState<
+    "idle" | "sending" | "awaiting" | "verifying" | "failed"
+  >("idle");
   const [error, setError] = useState<string | null>(null);
-  const busy = phase !== "idle";
+
+  const confirmationRef = useRef<Awaited<ReturnType<typeof sendPhoneVerificationCode>> | null>(null);
+  const recaptchaRef = useRef<ReturnType<typeof createPhoneRecaptchaVerifier> | null>(null);
+  const lastRequestedPhoneRef = useRef("");
+  const webOtpAbortRef = useRef<AbortController | null>(null);
+
+  const phoneBusy =
+    phonePhase === "sending" || phonePhase === "awaiting" || phonePhase === "verifying";
+  const busy = phase !== "idle" || phoneBusy;
 
   const exchange = useCallback(
     async (idToken: string) => {
@@ -147,6 +190,109 @@ export function LoginClient() {
     [router]
   );
 
+  const resetPhoneVerifier = useCallback(() => {
+    webOtpAbortRef.current?.abort();
+    webOtpAbortRef.current = null;
+    recaptchaRef.current?.clear();
+    recaptchaRef.current = null;
+  }, []);
+
+  const verifyOtp = useCallback(
+    async (code: string) => {
+      const confirmation = confirmationRef.current;
+      if (!confirmation || code.length !== 6 || phase !== "idle") return;
+
+      setError(null);
+      setPhonePhase("verifying");
+
+      try {
+        const result = await confirmation.confirm(code);
+        const token = await result.user.getIdToken();
+        await exchange(token);
+      } catch (e) {
+        setError(friendlyPhoneError(e));
+        setPhonePhase("failed");
+      }
+    },
+    [exchange, phase]
+  );
+
+  const requestPhoneCode = useCallback(
+    async (digits: string) => {
+      if (digits.length !== 10 || phase !== "idle") return;
+
+      setError(null);
+      setOtp("");
+      setPhonePhase("sending");
+      confirmationRef.current = null;
+      resetPhoneVerifier();
+
+      try {
+        const verifier = createPhoneRecaptchaVerifier("phone-recaptcha-trigger");
+        recaptchaRef.current = verifier;
+        const confirmation = await sendPhoneVerificationCode(
+          `+91${digits}`,
+          verifier
+        );
+        confirmationRef.current = confirmation;
+        setPhonePhase("awaiting");
+
+        // Best-effort Android/browser SMS autofill. Firebase still falls back
+        // to the normal OTP field when the browser cannot read the SMS.
+        if ("OTPCredential" in window) {
+          const controller = new AbortController();
+          webOtpAbortRef.current = controller;
+          try {
+            const credential = await (navigator.credentials as any).get({
+              otp: { transport: ["sms"] },
+              signal: controller.signal,
+            });
+            const code = typeof credential?.code === "string"
+              ? credential.code.replace(/\D/g, "").slice(0, 6)
+              : "";
+            if (code) setOtp(code);
+          } catch {
+            // Manual OTP entry remains available when WebOTP is unavailable.
+          }
+        }
+      } catch (e) {
+        setError(friendlyPhoneError(e));
+        setPhonePhase("failed");
+        confirmationRef.current = null;
+        resetPhoneVerifier();
+      }
+    },
+    [phase, resetPhoneVerifier]
+  );
+
+  useEffect(() => {
+    if (phone.length !== 10) {
+      lastRequestedPhoneRef.current = "";
+      if (phone.length < 10 && phonePhase !== "idle") {
+        setOtp("");
+        setPhonePhase("idle");
+        confirmationRef.current = null;
+        resetPhoneVerifier();
+      }
+      return;
+    }
+
+    if (
+      phase === "idle" &&
+      phonePhase === "idle" &&
+      lastRequestedPhoneRef.current !== phone
+    ) {
+      lastRequestedPhoneRef.current = phone;
+      void requestPhoneCode(phone);
+    }
+  }, [phone, phonePhase, phase, requestPhoneCode, resetPhoneVerifier]);
+
+  useEffect(() => {
+    if (phonePhase === "awaiting" && otp.length === 6) {
+      void verifyOtp(otp);
+    }
+  }, [otp, phonePhase, verifyOtp]);
+
   useEffect(() => {
     let dead = false;
     consumeRedirectResult()
@@ -163,6 +309,32 @@ export function LoginClient() {
         if (!dead) setError(friendlyError(e));
       });
     return () => {
+      dead = true;
+      webOtpAbortRef.current?.abort();
+      recaptchaRef.current?.clear();
+    };
+  }, [exchange]);
+
+  const signIn = async () => {
+    setError(null);
+    setPhase("google");
+    try {
+      await exchange(await signInWithGoogle());
+    } catch (e) {
+      if (e instanceof SignInCancelled) {
+        setPhase("idle");
+        return;
+      }
+      setError(friendlyError(e));
+      setPhase("idle");
+    }
+  };
+
+  const manualVerify = () => {
+    if (otp.length === 6) void verifyOtp(otp);
+  };
+
+  return () => {
       dead = true;
     };
   }, [exchange]);
@@ -226,29 +398,92 @@ export function LoginClient() {
             transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
             className="mt-10 flex flex-col"
           >
-            <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)] focus-within:border-[#E8E5E0] focus-within:ring-0 focus-within:outline-none">
-              <span className="shrink-0 text-[15px] font-[500] text-[#1A3B32]">+91</span>
-              <span className="mx-3 h-5 w-px bg-[#E8E5E0]" aria-hidden />
-              <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="Enter mobile number"
-                aria-label="Mobile number"
-                style={{
-                  outline: "none",
-                  boxShadow: "none",
-                  border: "0",
-                  background: "transparent",
-                  color: "#1A1A1A",
-                  caretColor: "#1A3B32",
-                  WebkitAppearance: "none",
-                  WebkitBoxShadow: "none",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-                className="min-w-0 flex-1 !appearance-none !border-0 !bg-transparent !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!bg-transparent focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!bg-transparent focus-visible:!outline-none focus-visible:!ring-0"
+            <div className="relative">
+              <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)] focus-within:border-[#E8E5E0] focus-within:ring-0 focus-within:outline-none">
+                <span className="shrink-0 text-[15px] font-[500] text-[#1A3B32]">+91</span>
+                <span className="mx-3 h-5 w-px bg-[#E8E5E0]" aria-hidden />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setError(null);
+                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+                  }}
+                  placeholder="Enter mobile number"
+                  aria-label="Mobile number"
+                  style={{
+                    outline: "none",
+                    boxShadow: "none",
+                    border: "0",
+                    background: "transparent",
+                    color: "#1A1A1A",
+                    caretColor: "#1A3B32",
+                    WebkitAppearance: "none",
+                    WebkitBoxShadow: "none",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                  className="min-w-0 flex-1 !appearance-none !border-0 !bg-transparent !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!bg-transparent focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!bg-transparent focus-visible:!outline-none focus-visible:!ring-0"
+                />
+              </div>
+
+              {phonePhase !== "idle" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="Enter verification code"
+                    aria-label="Verification code"
+                    style={{
+                      outline: "none",
+                      boxShadow: "none",
+                      border: "0",
+                      background: "transparent",
+                      color: "#1A1A1A",
+                      caretColor: "#1A3B32",
+                      WebkitAppearance: "none",
+                      WebkitBoxShadow: "none",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                    className="flex h-[48px] w-full rounded-full border border-[#E8E5E0] bg-white px-5 text-center text-[15px] tracking-[0.28em] !appearance-none !outline-none !ring-0 !shadow-none focus:border-[#E8E5E0] focus:outline-none focus:ring-0 focus:shadow-none focus-visible:border-[#E8E5E0] focus-visible:outline-none focus-visible:ring-0"
+                  />
+
+                  <p className="mt-2 px-2 text-center text-[11px] text-[#9A9A9A]">
+                    {phonePhase === "sending"
+                      ? "Sending verification code…"
+                      : phonePhase === "verifying"
+                      ? "Verifying code…"
+                      : "Code sent to +91 ••••••••" + phone.slice(-2)}
+                  </p>
+
+                  {phonePhase === "failed" && confirmationRef.current && (
+                    <button
+                      type="button"
+                      onClick={manualVerify}
+                      disabled={otp.length !== 6}
+                      className="mt-3 h-[44px] w-full rounded-full border border-[#E8E5E0] bg-white px-6 text-[14px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Verify code
+                    </button>
+                  )}
+                </motion.div>
+              )}
+
+              <button
+                id="phone-recaptcha-trigger"
+                type="button"
+                tabIndex={-1}
+                aria-hidden
+                className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
               />
             </div>
 
