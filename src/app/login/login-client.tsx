@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
 import { ThemeToggle } from "@/components/app-shell";
-import { consumeRedirectResult, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
+import { consumeRedirectResult, signInWithApple, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
 
 function AppleMark() {
   return (
@@ -34,7 +34,7 @@ function friendlyError(e: unknown) {
       case "auth/unauthorized-domain":
         return "This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";
       case "auth/operation-not-allowed":
-        return "Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+        return "This sign-in provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";
       case "auth/network-request-failed":
         return "Network hiccup reaching Google. Check your connection and retry.";
       case "auth/too-many-requests":
@@ -132,7 +132,7 @@ function QuillIllustration() {
 
 export function LoginClient() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange">("idle");
+  const [phase, setPhase] = useState<"idle" | "google" | "apple" | "exchange">("idle");
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== "idle";
 
@@ -179,6 +179,21 @@ export function LoginClient() {
     setPhase("google");
     try {
       await exchange(await signInWithGoogle());
+    } catch (e) {
+      if (e instanceof SignInCancelled) {
+        setPhase("idle");
+        return;
+      }
+      setError(friendlyError(e));
+      setPhase("idle");
+    }
+  };
+
+  const signInWithAppleProvider = async () => {
+    setError(null);
+    setPhase("apple");
+    try {
+      await exchange(await signInWithApple());
     } catch (e) {
       if (e instanceof SignInCancelled) {
         setPhase("idle");
@@ -251,7 +266,7 @@ export function LoginClient() {
             <button
               onClick={signIn}
               disabled={busy}
-              className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full bg-[#1A1A1A] px-6 text-[15px] font-[500] text-white shadow-[0_2px_8px_rgba(0,0,0,.12)] transition-all hover:bg-black hover:shadow-[0_4px_12px_rgba(0,0,0,.18)] active:scale-[0.98] disabled:opacity-60"
+              className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
             >
               {busy ? (
                 <motion.span
@@ -266,8 +281,8 @@ export function LoginClient() {
                 ? "Opening your workspace…"
                 : phase === "google"
                 ? "Waiting for Google…"
-                : phase === "guest"
-                ? "Opening private workspace…"
+                : phase === "apple"
+                ? "Waiting for Apple…"
                 : "Continue with Google"}
             </button>
 
@@ -277,19 +292,20 @@ export function LoginClient() {
 
             <button
               type="button"
-              disabled
-              className="flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] opacity-55 cursor-not-allowed"
-            >
-              <AppleMark />
-              Continue with Apple
-            </button>
-
-            <button
-              onClick={enterAsGuest}
+              onClick={signInWithAppleProvider}
               disabled={busy}
-              className="flex h-[48px] w-full items-center justify-center rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[450] text-[#1A1A1A] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
+              className="flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
             >
-              Use a private workspace
+              {phase === "apple" ? (
+                <motion.span
+                  className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                />
+              ) : (
+                <AppleMark />
+              )}
+              {phase === "apple" ? "Waiting for Apple…" : "Continue with Apple"}
             </button>
 
             {error && (
@@ -316,27 +332,6 @@ export function LoginClient() {
         </div>
       </div>
 
-      {/* Bottom minimal footer like Claude */}
-      <div className="flex items-center justify-center gap-8 border-t border-[#F0EDE8] px-6 py-4 sm:hidden">
-        <button className="text-[#9A9A9A]">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-        <button className="text-[#9A9A9A]">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M10 3L2 8V10H18V8L10 3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-            <path d="M5 10V15C5 15 7 17 10 17C13 17 15 15 15 15V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-        <button className="text-[#9A9A9A]">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M11 5H17V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M17 5L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M3 9V17H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 }
