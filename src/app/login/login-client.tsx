@@ -237,22 +237,59 @@ export function LoginClient() {
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 placeholder="Enter mobile number"
                 aria-label="Mobile number"
-                style={{ outline: "none", boxShadow: "none", WebkitAppearance: "none", WebkitTapHighlightColor: "transparent" }}
-                className="min-w-0 flex-1 !appearance-none !border-0 bg-transparent text-[15px] text-[#1A1A1A] !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!outline-none focus-visible:!ring-0"
+                style={{
+                  outline: "none",
+                  boxShadow: "none",
+                  border: "0",
+                  background: "transparent",
+                  WebkitAppearance: "none",
+                  WebkitBoxShadow: "none",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+                className="min-w-0 flex-1 !appearance-none !border-0 !bg-transparent !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!bg-transparent focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!bg-transparent focus-visible:!outline-none focus-visible:!ring-0"
               />
+            </div>
+
+            <div className="mt-5 flex flex-col gap-4">
+              <div className="flex items-center gap-3" aria-hidden>
+                <span className="h-px flex-1 bg-[#E8E5E0]" />
+                <span className="shrink-0 px-1 text-[12px] font-[500] text-[#A3A3A3]">or</span>
+                <span className="h-px flex-1 bg-[#E8E5E0]" />
+              </div>
+
+              <button
+                onClick={signIn}
+                disabled={busy}
+                className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
+              >
+                {busy ? (
+                  <motion.span
+                    className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                  />
+                ) : (
+                  <GoogleMark />
+                )}
+                {phase === "exchange"
+                  ? "Opening your workspace…"
+                  : phase === "google"
+                  ? "Waiting for Google…"
+                  : "Continue with Google"}
+              </button>
             </div>
 
             {error && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="px-2 text-center text-[13px] leading-relaxed text-[#D84C43]"
+                className="mt-4 px-2 text-center text-[13px] leading-relaxed text-[#D84C43]"
               >
                 {error}
               </motion.p>
             )}
 
-            <p className="px-4 pt-2 text-center text-[11px] leading-[1.5] text-[#9A9A9A]">
+            <p className="mt-3 px-4 text-center text-[11px] leading-[1.5] text-[#9A9A9A]">
               By continuing, you agree to Quill&apos;s{" "}
               <a href="#" className="underline decoration-[#9A9A9A]/40 underline-offset-2 hover:text-[#1A1A1A] hover:decoration-[#1A1A1A]">
                 Terms
@@ -262,7 +299,8 @@ export function LoginClient() {
                 Privacy Policy
               </a>
               .
-            </p>          </motion.div>
+            </p>
+          </motion.div>
         </div>
       </div>
 
