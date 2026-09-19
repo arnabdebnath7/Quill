@@ -4,32 +4,323 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
-import { Activity, BookOpenText, Globe2, ShieldCheck } from "lucide-react";
-import { Logo, ThemeToggle } from "@/components/app-shell";
+import { ThemeToggle } from "@/components/app-shell";
 import { consumeRedirectResult, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
 
-function GoogleMark(){return <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden><path fill="#4285F4" d="M23.5 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.09 3.57-5.16 3.57-8.81Z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.87-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.29v3.1A12 12 0 0 0 12 24Z"/><path fill="#FBBC05" d="M5.27 14.28a7.2 7.2 0 0 1 0-4.56v-3.1H1.29a12 12 0 0 0 0 10.76l3.98-3.1Z"/><path fill="#EA4335" d="M12 4.76c1.76 0 3.35.6 4.59 1.8l3.44-3.44A11.98 11.98 0 0 0 12 0 12 12 0 0 0 1.29 6.62l3.98 3.1C6.22 6.87 8.87 4.76 12 4.76Z"/></svg>}
-const FEATURES=[{icon:Activity,label:"Live prices"},{icon:BookOpenText,label:"Trade + life"},{icon:Globe2,label:"5 markets"},{icon:ShieldCheck,label:"Private"}];
-const EASE=[0.22,1,0.36,1] as const;
-function friendlyError(e:unknown){if(e instanceof FirebaseError){switch(e.code){case"auth/unauthorized-domain":return"This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";case"auth/operation-not-allowed":return"Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";case"auth/network-request-failed":return"Network hiccup reaching Google. Check your connection and retry.";case"auth/too-many-requests":return"Too many attempts. Give it a minute and try again.";default:return`Google sign-in failed (${e.code.replace("auth/","")}).`;}}return e instanceof Error?e.message:"Something went wrong. Please try again.";}
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
+      <path fill="#4285F4" d="M23.5 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.87c2.26-2.09 3.57-5.16 3.57-8.81Z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.87-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.29v3.1A12 12 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.27 14.28a7.2 7.2 0 0 1 0-4.56v-3.1H1.29a12 12 0 0 0 0 10.76l3.98-3.1Z" />
+      <path fill="#EA4335" d="M12 4.76c1.76 0 3.35.6 4.59 1.8l3.44-3.44A11.98 11.98 0 0 0 12 0 12 12 0 0 0 1.29 6.62l3.98 3.1C6.22 6.87 8.87 4.76 12 4.76Z" />
+    </svg>
+  );
+}
 
-function QuillRobot(){return <motion.div initial={{opacity:0,y:14,scale:.9}} animate={{opacity:1,y:0,scale:1}} transition={{delay:.05,duration:.62,ease:EASE}} className="relative mx-auto h-[178px] w-[178px] sm:h-[194px] sm:w-[194px]" aria-label="Quill robot companion">
-  <div className="absolute inset-x-7 bottom-3 h-8 rounded-full bg-black/10 blur-xl"/>
-  <motion.div animate={{y:[0,-4,0]}} transition={{duration:3.6,repeat:Infinity,ease:"easeInOut"}} className="absolute inset-0">
-    <motion.div animate={{rotate:[0,-1,0,1,0]}} transition={{duration:5.8,repeat:Infinity,ease:"easeInOut"}} className="absolute inset-[10%]" style={{transformStyle:"preserve-3d"}}>
-      <div className="absolute left-[25%] top-[58%] h-[29%] w-[50%] rounded-[30%] bg-gradient-to-br from-[#fbf7ef] via-[#e7e0d4] to-[#c8bfb2] shadow-[inset_-9px_-10px_16px_rgba(0,0,0,.10),inset_8px_7px_14px_rgba(255,255,255,.8),0_16px_25px_rgba(0,0,0,.12)]"/>
-      <div className="absolute left-[14%] top-[25%] h-[49%] w-[72%] rounded-[30%] border border-black/5 bg-gradient-to-br from-[#fffaf2] via-[#eee8de] to-[#cdc5ba] shadow-[inset_-14px_-15px_23px_rgba(0,0,0,.12),inset_11px_10px_18px_rgba(255,255,255,.86),0_20px_38px_rgba(0,0,0,.14)]"/>
-      <div className="absolute left-[25%] top-[33%] h-[31%] w-[50%] rounded-[28%] bg-gradient-to-br from-[#33322f] via-[#1d1d1a] to-[#0b0c0a] shadow-[inset_5px_5px_9px_rgba(255,255,255,.12),inset_-6px_-7px_10px_rgba(0,0,0,.28),0_7px_12px_rgba(0,0,0,.16)]"/>
-      <motion.div animate={{scaleY:[1,1,.08,1,1]}} transition={{duration:4.1,repeat:Infinity,times:[0,.47,.485,.5,1],ease:"easeInOut"}} className="absolute left-[35%] top-[44%] h-[6%] w-[8%] rounded-full bg-[#f6efe1]"/>
-      <motion.div animate={{scaleY:[1,1,.08,1,1]}} transition={{duration:4.1,repeat:Infinity,times:[0,.47,.485,.5,1],ease:"easeInOut"}} className="absolute right-[35%] top-[44%] h-[6%] w-[8%] rounded-full bg-[#f6efe1]"/>
-      <motion.div animate={{y:[0,-2,0],rotate:[0,5,0]}} transition={{duration:2.9,repeat:Infinity,ease:"easeInOut"}} className="absolute left-[43%] -top-[4%] h-[17%] w-[14%] rounded-[46%] bg-gradient-to-br from-[#f0aa5e] to-[#bf6828] shadow-[inset_4px_4px_7px_rgba(255,255,255,.42),inset_-5px_-5px_7px_rgba(0,0,0,.16),0_5px_10px_rgba(0,0,0,.10)]"><span className="absolute left-1/2 top-[10%] h-[24%] w-[16%] -translate-x-1/2 rounded-full bg-[#fff4df]/80"/></motion.div>
-      <div className="absolute left-[4%] top-[57%] h-[18%] w-[11%] rounded-full bg-gradient-to-br from-[#f0aa5e] to-[#bf6828] shadow-[inset_3px_3px_6px_rgba(255,255,255,.4),inset_-4px_-4px_6px_rgba(0,0,0,.14)]"/>
-      <div className="absolute right-[4%] top-[57%] h-[18%] w-[11%] rounded-full bg-gradient-to-br from-[#f0aa5e] to-[#bf6828] shadow-[inset_3px_3px_6px_rgba(255,255,255,.4),inset_-4px_-4px_6px_rgba(0,0,0,.14)]"/>
-      <motion.div animate={{x:[0,1.5,0],rotate:[0,4,0]}} transition={{duration:2.7,repeat:Infinity,ease:"easeInOut"}} className="absolute right-[1%] top-[43%] h-[13%] w-[11%] rounded-full bg-gradient-to-br from-[#f4b36c] to-[#c8732e] shadow-[inset_3px_3px_6px_rgba(255,255,255,.38),inset_-4px_-4px_6px_rgba(0,0,0,.14)]"/>
-      <div className="absolute left-[28%] bottom-[1%] h-[9%] w-[17%] rounded-[42%] bg-gradient-to-br from-[#efab61] to-[#bf6828]"/><div className="absolute right-[28%] bottom-[1%] h-[9%] w-[17%] rounded-[42%] bg-gradient-to-br from-[#efab61] to-[#bf6828]"/>
-      <div className="absolute left-[31%] top-[68%] h-[4%] w-[10%] rounded-full bg-[#6b675f]/35"/><div className="absolute right-[31%] top-[68%] h-[4%] w-[10%] rounded-full bg-[#6b675f]/35"/>
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+function friendlyError(e: unknown) {
+  if (e instanceof FirebaseError) {
+    switch (e.code) {
+      case "auth/unauthorized-domain":
+        return "This domain isn't whitelisted yet — add it under Firebase Console → Auth → Authorized domains.";
+      case "auth/operation-not-allowed":
+        return "Google provider is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+      case "auth/network-request-failed":
+        return "Network hiccup reaching Google. Check your connection and retry.";
+      case "auth/too-many-requests":
+        return "Too many attempts. Give it a minute and try again.";
+      default:
+        return `Google sign-in failed (${e.code.replace("auth/", "")}).`;
+    }
+  }
+  return e instanceof Error ? e.message : "Something went wrong. Please try again.";
+}
+
+function QuillIllustration() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
+      className="relative mx-auto flex h-[200px] w-[260px] items-center justify-center sm:h-[220px] sm:w-[300px]"
+    >
+      {/* Minimal hand-drawn style illustration inspired by Claude reference but for Quill */}
+      <svg viewBox="0 0 260 200" width="100%" height="100%" className="overflow-visible">
+        {/* Subtle paper texture background */}
+        <ellipse cx="130" cy="185" rx="90" ry="10" fill="#1A3B32" opacity="0.06" />
+        
+        {/* Journal base */}
+        <motion.g
+          initial={{ rotate: -2 }}
+          animate={{ rotate: 0 }}
+          transition={{ duration: 0.8, ease: EASE, delay: 0.2 }}
+        >
+          <path
+            d="M 50 70 Q 50 50 70 50 L 190 50 Q 210 50 210 70 L 210 150 Q 210 170 190 170 L 70 170 Q 50 170 50 150 Z"
+            fill="none"
+            stroke="#1A3B32"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M 50 70 Q 50 50 70 50 L 80 50 Q 60 50 60 70 L 60 150 Q 60 170 80 170 L 70 170 Q 50 170 50 150 Z"
+            fill="#FAF6EB"
+            stroke="#1A3B32"
+            strokeWidth="2"
+          />
+          {/* Pages lines */}
+          <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }}>
+            <line x1="75" y1="75" x2="185" y2="75" stroke="#1A3B32" strokeWidth="1.2" opacity="0.25" strokeLinecap="round" />
+            <line x1="75" y1="90" x2="185" y2="90" stroke="#1A3B32" strokeWidth="1.2" opacity="0.2" strokeLinecap="round" />
+            <line x1="75" y1="105" x2="160" y2="105" stroke="#1A3B32" strokeWidth="1.2" opacity="0.18" strokeLinecap="round" />
+            <line x1="75" y1="120" x2="175" y2="120" stroke="#1A3B32" strokeWidth="1.2" opacity="0.15" strokeLinecap="round" />
+          </motion.g>
+        </motion.g>
+
+        {/* Feather quill - floating above journal */}
+        <motion.g
+          initial={{ y: -10, rotate: 12, opacity: 0 }}
+          animate={{ y: 0, rotate: 8, opacity: 1 }}
+          transition={{ duration: 0.7, ease: EASE, delay: 0.35, type: "spring", bounce: 0.3 }}
+        >
+          {/* Feather shadow */}
+          <ellipse cx="145" cy="48" rx="18" ry="4" fill="#1A3B32" opacity="0.08" />
+          {/* Feather */}
+          <g transform="translate(110, 15) rotate(22)">
+            <path
+              d="M 20 55 C 16 48 12 38 12 28 C 12 18 16 10 22 4 C 28 -2 36 -6 48 -8 C 50 -4 50 0 48 5 C 46 9 42 13 38 16 C 38 16 42 14 46 10 C 46 10 44 14 40 16 C 36 18 32 18 30 20 C 30 20 34 19 38 16 C 38 16 36 20 32 22 C 28 24 24 24 22 26 C 20 28 20 32 20 36 C 20 42 20 50 20 55 Z"
+              fill="white"
+              stroke="#1A3B32"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M 20 55 C 21 46 23 38 26 32 C 29 26 32 20 38 14"
+              fill="none"
+              stroke="#1A3B32"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </g>
+        </motion.g>
+
+        {/* Small accent dot - like Claude's orange dot */}
+        <motion.circle
+          cx="195"
+          cy="35"
+          r="14"
+          fill="#1A3B32"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.6, duration: 0.4, type: "spring", bounce: 0.5 }}
+        />
+      </svg>
     </motion.div>
-  </motion.div>
-</motion.div>}
+  );
+}
 
-export function LoginClient(){const router=useRouter();const[phase,setPhase]=useState<"idle"|"google"|"guest"|"exchange">("idle");const[error,setError]=useState<string|null>(null);const busy=phase!=="idle";const exchange=useCallback(async(idToken:string)=>{setPhase("exchange");const res=await fetch("/api/auth/google",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken})});if(!res.ok){const json=await res.json().catch(()=>({}));throw new Error(json.error??"Sign-in verification failed.");}router.replace("/");router.refresh();},[router]);useEffect(()=>{let dead=false;consumeRedirectResult().then(token=>{if(dead||!token)return;exchange(token).catch(e=>{if(!dead){setError(friendlyError(e));setPhase("idle");}})}).catch(e=>{if(!dead)setError(friendlyError(e));});return()=>{dead=true;};},[exchange]);const signIn=async()=>{setError(null);setPhase("google");try{await exchange(await signInWithGoogle());}catch(e){if(e instanceof SignInCancelled){setPhase("idle");return;}setError(friendlyError(e));setPhase("idle");}};const enterAsGuest=async()=>{setError(null);setPhase("guest");try{const res=await fetch("/api/auth/guest",{method:"POST"});const json=await res.json().catch(()=>({}));if(!res.ok)throw new Error(json.error??"Guest access failed. Please try again.");router.replace("/");router.refresh();}catch(e){setError(e instanceof Error?e.message:"Guest access failed. Please try again.");setPhase("idle");}};return <div className="relative z-10 flex min-h-dvh items-center justify-center bg-[radial-gradient(circle_at_50%_0%,rgba(212,119,46,.10),transparent_34%)] px-0 sm:px-5 sm:py-5"><div className="relative flex min-h-dvh w-full flex-col overflow-hidden border-line bg-paper sm:min-h-[calc(100dvh-40px)] sm:max-w-[460px] sm:rounded-[32px] sm:border sm:shadow-[0_24px_70px_rgba(27,25,22,.15)] dark:sm:shadow-[0_24px_70px_rgba(0,0,0,.45)]"><div className="flex items-center justify-between px-5 pb-3 pt-[max(15px,env(safe-area-inset-top))]"><div className="flex items-center gap-2.5"><Logo size={31}/><div><div className="font-display text-[17px] font-semibold leading-none tracking-[-.025em]">Quill</div><div className="mt-1 text-[9.5px] font-medium uppercase tracking-[.16em] text-faint">private journal</div></div></div><div className="flex items-center gap-2"><span className="flex items-center gap-1.5 rounded-full border border-line bg-card px-2.5 py-1.5 text-[10px] font-medium text-faint"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-up"/>ready</span><ThemeToggle/></div></div><div className="flex flex-1 flex-col overflow-y-auto px-5 pb-[max(18px,env(safe-area-inset-bottom))] pt-2"><div className="flex flex-1 flex-col justify-center"><QuillRobot/><motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:.19,duration:.52,ease:EASE}} className="mx-auto mt-0 max-w-[340px] text-center"><p className="mb-2 text-[10px] font-semibold uppercase tracking-[.18em] text-brand">Welcome back</p><h1 className="font-display text-[31px] font-semibold leading-[1.04] tracking-[-.04em] sm:text-[35px]">Your trades.<br/>Your days. <span className="text-brand">One journal.</span></h1><p className="mt-3 text-[13.5px] leading-relaxed text-sub">A calm private workspace for trades, notes and behavioural intelligence.</p></motion.div><motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{delay:.3,duration:.55,ease:EASE}} className="mx-auto mt-6 w-full max-w-[340px] rounded-[24px] border border-line bg-card p-2.5 shadow-[var(--shadow)]"><button onClick={signIn} disabled={busy} className="group flex h-12 w-full items-center justify-center gap-3 rounded-[17px] bg-brand text-brandon text-[14px] font-semibold shadow-[0_10px_24px_-14px_var(--brand)] transition-transform hover:brightness-[1.03] active:scale-[.985] disabled:opacity-65">{busy?<motion.span className="h-[18px] w-[18px] rounded-full border-2 border-brandon/30 border-t-brandon" animate={{rotate:360}} transition={{repeat:Infinity,duration:.7,ease:"linear"}}/>:<GoogleMark/>}{phase==="exchange"?"Opening your workspace…":phase==="google"?"Waiting for Google…":phase==="guest"?"Opening private workspace…":"Continue with Google"}</button><button onClick={enterAsGuest} disabled={busy} className="mt-1.5 flex h-11 w-full items-center justify-center rounded-[16px] text-[13px] font-medium text-sub transition-colors hover:bg-paper-2 hover:text-ink active:scale-[.985] disabled:opacity-60">Use a private workspace</button>{error&&<motion.p initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} className="px-2 pt-1 text-center text-[11.5px] leading-relaxed text-down">{error}</motion.p>}<p className="px-2 pb-1 pt-2 text-center text-[10.5px] leading-relaxed text-faint">No seeded demo trades. Your workspace starts clean.</p></motion.div></div><motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.48,duration:.6}} className="mx-auto mt-7 flex w-full max-w-[340px] items-center justify-center gap-4 text-[10px] font-medium text-faint">{FEATURES.map((f,i)=><div key={f.label} className="flex items-center gap-1.5"><f.icon className="h-3.5 w-3.5 text-brand"/><span>{f.label}</span>{i<FEATURES.length-1&&<span className="ml-2 h-1 w-1 rounded-full bg-line"/>}</div>)}</motion.div></div><p className="pb-3 text-center text-[9.5px] text-faint">Quill — a journal that trades as hard as you do.</p></div></div>}
+export function LoginClient() {
+  const router = useRouter();
+  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const busy = phase !== "idle";
+
+  const exchange = useCallback(
+    async (idToken: string) => {
+      setPhase("exchange");
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? "Sign-in verification failed.");
+      }
+      router.replace("/");
+      router.refresh();
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    let dead = false;
+    consumeRedirectResult()
+      .then((token) => {
+        if (dead || !token) return;
+        exchange(token).catch((e) => {
+          if (!dead) {
+            setError(friendlyError(e));
+            setPhase("idle");
+          }
+        });
+      })
+      .catch((e) => {
+        if (!dead) setError(friendlyError(e));
+      });
+    return () => {
+      dead = true;
+    };
+  }, [exchange]);
+
+  const signIn = async () => {
+    setError(null);
+    setPhase("google");
+    try {
+      await exchange(await signInWithGoogle());
+    } catch (e) {
+      if (e instanceof SignInCancelled) {
+        setPhase("idle");
+        return;
+      }
+      setError(friendlyError(e));
+      setPhase("idle");
+    }
+  };
+
+  const enterAsGuest = async () => {
+    setError(null);
+    setPhase("guest");
+    try {
+      const res = await fetch("/api/auth/guest", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Guest access failed. Please try again.");
+      router.replace("/");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Guest access failed. Please try again.");
+      setPhase("idle");
+    }
+  };
+
+  return (
+    <div className="relative flex min-h-dvh flex-col bg-[#FEFDF9]">
+      {/* Top bar - minimal like Claude */}
+      <div className="flex items-center justify-between px-6 py-4 sm:px-8">
+        <div className="flex items-center gap-2.5">
+          <img src="/quill-icon.png" alt="Quill" className="h-8 w-8 rounded-[10px] object-contain" />
+          <span className="font-display text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "#1A3B32", fontFamily: "var(--font-jakarta)" }}>
+            quill
+          </span>
+        </div>
+        <ThemeToggle />
+      </div>
+
+      {/* Main content - centered like Claude */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-8 sm:px-8">
+        <div className="w-full max-w-[360px]">
+          <QuillIllustration />
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25, duration: 0.5, ease: EASE }}
+            className="mt-2 text-center"
+          >
+            <h1 className="font-display text-[32px] font-[550] leading-[1.15] tracking-[-0.03em] sm:text-[36px]" style={{ color: "#1A3B32" }}>
+              The journal for
+              <br />
+              traders who think
+            </h1>
+            <p className="mx-auto mt-3 max-w-[300px] text-[14px] leading-relaxed text-[#6B6B6B]">
+              A calm, private workspace for trades, notes and behavioural intelligence.
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
+            className="mt-10 space-y-4"
+          >
+            <button
+              onClick={signIn}
+              disabled={busy}
+              className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full bg-[#1A1A1A] px-6 text-[15px] font-[500] text-white shadow-[0_2px_8px_rgba(0,0,0,.12)] transition-all hover:bg-black hover:shadow-[0_4px_12px_rgba(0,0,0,.18)] active:scale-[0.98] disabled:opacity-60"
+            >
+              {busy ? (
+                <motion.span
+                  className="h-[18px] w-[18px] rounded-full border-2 border-white/30 border-t-white"
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                />
+              ) : (
+                <GoogleMark />
+              )}
+              {phase === "exchange"
+                ? "Opening your workspace…"
+                : phase === "google"
+                ? "Waiting for Google…"
+                : phase === "guest"
+                ? "Opening private workspace…"
+                : "Continue with Google"}
+            </button>
+
+            <div className="flex items-center gap-4 py-1">
+              <div className="h-px flex-1 bg-[#E8E5E0]" />
+              <span className="text-[13px] font-medium uppercase tracking-widest text-[#9A9A9A]">OR</span>
+              <div className="h-px flex-1 bg-[#E8E5E0]" />
+            </div>
+
+            <button
+              onClick={enterAsGuest}
+              disabled={busy}
+              className="flex h-[48px] w-full items-center justify-center rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[450] text-[#1A1A1A] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
+            >
+              Use a private workspace
+            </button>
+
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="px-2 text-center text-[13px] leading-relaxed text-[#D84C43]"
+              >
+                {error}
+              </motion.p>
+            )}
+
+            <p className="px-4 pt-2 text-center text-[11px] leading-[1.5] text-[#9A9A9A]">
+              By continuing, you agree to Quill&apos;s{" "}
+              <a href="#" className="underline decoration-[#9A9A9A]/40 underline-offset-2 hover:text-[#1A1A1A] hover:decoration-[#1A1A1A]">
+                Terms
+              </a>{" "}
+              and{" "}
+              <a href="#" className="underline decoration-[#9A9A9A]/40 underline-offset-2 hover:text-[#1A1A1A] hover:decoration-[#1A1A1A]">
+                Privacy Policy
+              </a>
+              .
+            </p>
+
+            <p className="pt-1 text-center text-[11px] text-[#C4C0B8]">No demo data. Your workspace starts clean.</p>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Bottom minimal footer like Claude */}
+      <div className="flex items-center justify-center gap-8 border-t border-[#F0EDE8] px-6 py-4 sm:hidden">
+        <button className="text-[#9A9A9A]">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button className="text-[#9A9A9A]">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M10 3L2 8V10H18V8L10 3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+            <path d="M5 10V15C5 15 7 17 10 17C13 17 15 15 15 15V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button className="text-[#9A9A9A]">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M11 5H17V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M17 5L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M3 9V17H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
