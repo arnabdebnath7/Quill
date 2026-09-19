@@ -2,7 +2,9 @@ import { pgTable, text, uuid, timestamp, numeric, integer, boolean, uniqueIndex 
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
-  email: text("email").notNull().unique(),
+  email: text("email").unique(),
+  phone: text("phone").unique(),
+  firebaseUid: text("firebase_uid").unique(),
   name: text("name").notNull(),
   image: text("image"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
