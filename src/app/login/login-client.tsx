@@ -318,51 +318,6 @@ export function LoginClient() {
     if (otp.length === 6) void verifyOtp(otp);
   };
 
-  return () => {
-      dead = true;
-      recaptchaRef.current?.clear();
-    };
-  }, [exchange]);
-
-  const signIn = async () => {
-    setError(null);
-    setPhase("google");
-    try {
-      await exchange(await signInWithGoogle());
-    } catch (e) {
-      if (e instanceof SignInCancelled) {
-        setPhase("idle");
-        return;
-      }
-      setError(friendlyError(e));
-      setPhase("idle");
-    }
-  };
-
-  const manualVerify = () => {
-    if (otp.length === 6) void verifyOtp(otp);
-  };
-
-  return () => {
-      dead = true;
-    };
-  }, [exchange]);
-
-  const signIn = async () => {
-    setError(null);
-    setPhase("google");
-    try {
-      await exchange(await signInWithGoogle());
-    } catch (e) {
-      if (e instanceof SignInCancelled) {
-        setPhase("idle");
-        return;
-      }
-      setError(friendlyError(e));
-      setPhase("idle");
-    }
-  };
-
   return (
     <div className="relative flex min-h-dvh flex-col bg-[#FEFDF9]">
       {/* Top bar - minimal like Claude */}
