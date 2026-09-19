@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
 import { ThemeToggle } from "@/components/app-shell";
-import { consumeRedirectResult, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
+import { consumeRedirectResult, signInWithApple, signInWithGoogle, SignInCancelled } from "@/lib/firebase";
+
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-current" aria-hidden>
+      <path d="M17.05 12.55c-.02-2.04 1.67-3.02 1.75-3.07a3.76 3.76 0 0 0-2.95-1.6c-1.25-.13-2.46.75-3.1.75-.65 0-1.64-.73-2.7-.71-1.39.02-2.67.81-3.38 2.04-1.45 2.51-.37 6.2 1.02 8.23.69.99 1.5 2.1 2.57 2.06 1.03-.04 1.42-.66 2.67-.66 1.24 0 1.6.66 2.69.64 1.11-.02 1.82-1 2.5-2 .79-1.15 1.11-2.27 1.13-2.33-.03-.01-2.17-.83-2.2-3.35ZM15.01 6.55c.56-.68.94-1.63.83-2.57-.8.03-1.76.53-2.33 1.2-.51.59-.96 1.55-.84 2.47.89.07 1.78-.45 2.34-1.1Z"/>
+    </svg>
+  );
+}
 
 function GoogleMark() {
   return (
@@ -124,7 +132,7 @@ function QuillIllustration() {
 
 export function LoginClient() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "google" | "guest" | "exchange">("idle");
+  const [phase, setPhase] = useState<"idle" | "google" | "apple" | "guest" | "exchange">("idle");
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== "idle";
 
@@ -166,6 +174,21 @@ export function LoginClient() {
     };
   }, [exchange]);
 
+  const signInApple = async () => {
+    setError(null);
+    setPhase("apple");
+    try {
+      await exchange(await signInWithApple());
+    } catch (e) {
+      if (e instanceof SignInCancelled) {
+        setPhase("idle");
+        return;
+      }
+      setError(e instanceof FirebaseError ? friendlyError(e) : e instanceof Error ? e.message : "Apple sign-in could not be completed. Please try again.");
+      setPhase("idle");
+    }
+  };
+
   const signIn = async () => {
     setError(null);
     setPhase("google");
@@ -201,10 +224,14 @@ export function LoginClient() {
       {/* Top bar - minimal like Claude */}
       <div className="flex items-center justify-between px-6 py-4 sm:px-8">
         <div className="flex items-center gap-2.5">
-          <img src="/quill-icon.png" alt="Quill" className="h-8 w-8 rounded-[10px] object-contain" />
-          <span className="font-display text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "#1A3B32", fontFamily: "var(--font-jakarta)" }}>
-            quill
-          </span>
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+            <svg viewBox="0 0 200 200" className="h-full w-full" aria-label="Quill logo">
+              <circle cx="100" cy="100" r="96" fill="#1A3B32" />
+              <path d="M 92 172 C 84 158 68 138 65 110 C 62 88 70 70 82 56 C 94 42 116 28 148 18 C 151 28 152 40 147 52 C 142 62 134 70 126 76 C 126 76 136 73 144 66 C 144 66 140 76 132 82 C 124 88 114 90 108 96 C 108 96 118 94 126 88 C 126 88 120 98 110 102 C 100 106 92 108 88 114 C 84 120 84 130 86 138 C 88 148 90 162 92 172 Z" fill="white" />
+              <path d="M 92 172 C 94 150 100 130 108 114 C 116 98 126 84 142 68 C 130 80 120 92 112 106 C 104 120 96 138 92 172 Z" fill="#1A3B32" />
+            </svg>
+          </div>
+          <span className="font-display text-[22px] font-semibold tracking-[-0.02em]" style={{ color: "#1A3B32", fontFamily: "var(--font-jakarta)" }}>quill</span>
         </div>
         <ThemeToggle />
       </div>
@@ -259,11 +286,26 @@ export function LoginClient() {
                 : "Continue with Google"}
             </button>
 
-            <div className="flex items-center gap-4 py-1">
-              <div className="h-px flex-1 bg-[#E8E5E0]" />
-              <span className="text-[13px] font-medium uppercase tracking-widest text-[#9A9A9A]">OR</span>
-              <div className="h-px flex-1 bg-[#E8E5E0]" />
+            <div className="py-1 text-center">
+              <span className="text-[12px] font-medium uppercase tracking-[0.18em] text-[#A09C95]">OR</span>
             </div>
+
+            <button
+              onClick={signInApple}
+              disabled={busy}
+              className="flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_1px_4px_rgba(0,0,0,.04)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] hover:shadow-[0_2px_8px_rgba(0,0,0,.06)] active:scale-[0.98] disabled:opacity-60"
+            >
+              {phase === "apple" || phase === "exchange" ? (
+                <motion.span
+                  className="h-[18px] w-[18px] rounded-full border-2 border-[#1A1A1A]/20 border-t-[#1A1A1A]"
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                />
+              ) : (
+                <AppleMark />
+              )}
+              {phase === "apple" ? "Waiting for Apple…" : phase === "exchange" ? "Opening your workspace…" : "Continue with Apple"}
+            </button>
 
             <button
               onClick={enterAsGuest}
