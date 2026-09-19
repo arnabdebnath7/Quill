@@ -204,21 +204,6 @@ export function LoginClient() {
     }
   };
 
-  const enterAsGuest = async () => {
-    setError(null);
-    setPhase("guest");
-    try {
-      const res = await fetch("/api/auth/guest", { method: "POST" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error ?? "Guest access failed. Please try again.");
-      router.replace("/");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Guest access failed. Please try again.");
-      setPhase("idle");
-    }
-  };
-
   return (
     <div className="relative flex min-h-dvh flex-col bg-[#FEFDF9]">
       {/* Top bar - minimal like Claude */}
@@ -270,7 +255,7 @@ export function LoginClient() {
             >
               {busy ? (
                 <motion.span
-                  className="h-[18px] w-[18px] rounded-full border-2 border-white/30 border-t-white"
+                  className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
                   animate={{ rotate: 360 }}
                   transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
                 />
