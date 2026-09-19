@@ -5,6 +5,7 @@ import {
   getAuth,
   getRedirectResult,
   GoogleAuthProvider,
+  OAuthProvider,
   setPersistence,
   browserLocalPersistence,
   signInWithPopup,
@@ -27,9 +28,12 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
-const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: "select_account" });
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
+const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
 
 // Analytics only where it can actually run.
 if (typeof window !== "undefined") {
@@ -45,12 +49,7 @@ export class SignInCancelled extends Error {
   }
 }
 
-/**
- * Starts Google sign-in. Returns a Firebase ID token for the server exchange.
- * Falls back to a full-page redirect when popups are unavailable (embedded
- * browsers, some WebViews, popup blockers).
- */
-export async function signInWithGoogle(): Promise<string> {
+async function signInWithProvider(provider: GoogleAuthProvider | OAuthProvider): Promise<string> {
   try {
     const res = await signInWithPopup(auth, provider);
     return await res.user.getIdToken();
@@ -63,13 +62,22 @@ export async function signInWithGoogle(): Promise<string> {
         e.code === "auth/web-storage-unsupported"
       ) {
         await signInWithRedirect(auth, provider);
-        // Control never returns here — the page navigates away.
         return new Promise<string>(() => {});
       }
       if (e.code === "auth/popup-closed-by-user") throw new SignInCancelled();
     }
     throw e;
   }
+}
+
+/** Starts Google sign-in. Returns a Firebase ID token for the server exchange. */
+export function signInWithGoogle(): Promise<string> {
+  return signInWithProvider(googleProvider);
+}
+
+/** Starts Apple sign-in. Returns a Firebase ID token for the server exchange. */
+export function signInWithApple(): Promise<string> {
+  return signInWithProvider(appleProvider);
 }
 
 /** Completes a redirect-based sign-in after the round trip to Google or Apple. */
