@@ -224,7 +224,7 @@ export function LoginClient() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
-            className="mt-10 flex flex-col gap-4"
+            className="mt-10 flex flex-col"
           >
             <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)]">
               <span className="shrink-0 text-[15px] font-[500] text-[#1A3B32]">+91</span>
@@ -237,37 +237,46 @@ export function LoginClient() {
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 placeholder="Enter mobile number"
                 aria-label="Mobile number"
-                className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#1A1A1A] outline-none ring-0 placeholder:text-[#A3A3A3] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                className="min-w-0 flex-1 appearance-none border-0 bg-transparent text-[15px] text-[#1A1A1A] outline-none ring-0 shadow-none placeholder:text-[#A3A3A3] focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0"
               />
             </div>
-            <button
-              type="button"
-              disabled
-              className="flex h-[48px] w-full items-center justify-center rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              Continue with phone
-            </button>
 
-            <button
-              onClick={signIn}
-              disabled={busy}
-              className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
-            >
-              {busy ? (
-                <motion.span
-                  className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-                />
-              ) : (
-                <GoogleMark />
-              )}
-              {phase === "exchange"
-                ? "Opening your workspace…"
-                : phase === "google"
-                ? "Waiting for Google…"
-                : "Continue with Google"}
-            </button>
+            <div className="mt-5 flex flex-col gap-4">
+              <button
+                type="button"
+                disabled
+                className="flex h-[48px] w-full items-center justify-center rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                Continue with phone
+              </button>
+
+              <div className="flex items-center gap-3" aria-hidden>
+                <span className="h-px flex-1 bg-[#E8E5E0]" />
+                <span className="shrink-0 px-1 text-[12px] font-[500] text-[#A3A3A3]">or</span>
+                <span className="h-px flex-1 bg-[#E8E5E0]" />
+              </div>
+
+              <button
+                onClick={signIn}
+                disabled={busy}
+                className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
+              >
+                {busy ? (
+                  <motion.span
+                    className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                  />
+                ) : (
+                  <GoogleMark />
+                )}
+                {phase === "exchange"
+                  ? "Opening your workspace…"
+                  : phase === "google"
+                  ? "Waiting for Google…"
+                  : "Continue with Google"}
+              </button>
+            </div>
 
             {error && (
               <motion.p
