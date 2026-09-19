@@ -1,10 +1,8 @@
 "use client";
 
-import { getApp, getApps, initializeApp, FirebaseError } from "firebase/app";
 import {
   getAuth,
   getRedirectResult,
-  AppleAuthProvider,
   GoogleAuthProvider,
   setPersistence,
   browserLocalPersistence,
