@@ -226,7 +226,7 @@ export function LoginClient() {
             transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
             className="mt-10 flex flex-col"
           >
-            <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)]">
+            <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)] focus-within:border-[#E8E5E0] focus-within:ring-0 focus-within:outline-none">
               <span className="shrink-0 text-[15px] font-[500] text-[#1A3B32]">+91</span>
               <span className="mx-3 h-5 w-px bg-[#E8E5E0]" aria-hidden />
               <input
@@ -242,6 +242,8 @@ export function LoginClient() {
                   boxShadow: "none",
                   border: "0",
                   background: "transparent",
+                  color: "#1A1A1A",
+                  caretColor: "#1A3B32",
                   WebkitAppearance: "none",
                   WebkitBoxShadow: "none",
                   WebkitTapHighlightColor: "transparent",
@@ -250,7 +252,7 @@ export function LoginClient() {
               />
             </div>
 
-            <div className="mt-5 flex flex-col gap-4">
+            <div className="mt-6 flex flex-col gap-5">
               <div className="flex items-center gap-3" aria-hidden>
                 <span className="h-px flex-1 bg-[#E8E5E0]" />
                 <span className="shrink-0 px-1 text-[12px] font-[500] text-[#A3A3A3]">or</span>
