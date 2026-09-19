@@ -38,7 +38,9 @@ const QUICK=[
 ];
 
 export function Logo({size=30}:{size?:number}){
-  return <motion.div whileHover={{rotate:-4,scale:1.03}} whileTap={{scale:.94}} className="relative flex items-center justify-center rounded-[10px] bg-brandsolid text-brandon" style={{width:size,height:size}}><Feather style={{width:size*.52,height:size*.52}} strokeWidth={2.2}/></motion.div>
+  return <motion.div whileHover={{rotate:-2,scale:1.02}} whileTap={{scale:.96}} className="relative flex items-center justify-center overflow-hidden rounded-[12px] bg-[#FAF6EB] shadow-[0_1px_2px_rgba(0,0,0,.06)]" style={{width:size,height:size}}>
+    <img src="/quill-icon.png" alt="Quill" className="h-full w-full object-contain p-[2px]" draggable={false} />
+  </motion.div>
 }
 
 export function ThemeToggle(){

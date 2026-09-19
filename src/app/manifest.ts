@@ -8,13 +8,15 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/today",
     scope: "/",
     display: "standalone",
-    background_color: "#0c0d10",
-    theme_color: "#b45309",
+    background_color: "#FAF6EB",
+    theme_color: "#1A3B32",
     orientation: "portrait-primary",
     icons: [
       { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "/quill-icon.png", sizes: "any", type: "image/png", purpose: "any" },
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/quill-logo.png", sizes: "512x512", type: "image/png", purpose: "any" },
     ],
   };
 }
