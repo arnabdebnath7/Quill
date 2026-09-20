@@ -61,6 +61,10 @@ function friendlyPhoneError(e: unknown) {
         return "Phone verification could not be completed. Please try again.";
       case "auth/operation-not-allowed":
         return "Phone sign-in is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+      case "auth/internal-error":
+        return "Firebase could not start phone verification. Check the SMS region policy and billing/phone-auth quota for this project.";
+      case "auth/invalid-app-credential":
+        return "Phone verification security check failed. Please retry.";
       case "auth/network-request-failed":
         return "Network hiccup reaching phone verification. Check your connection and retry.";
       default:
@@ -167,6 +171,7 @@ export function LoginClient() {
 
   const confirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+  const phoneButtonRef = useRef<HTMLButtonElement | null>(null);
   const lastRequestedPhoneRef = useRef("");
 
   const phoneBusy =
@@ -229,7 +234,9 @@ export function LoginClient() {
       resetPhoneVerifier();
 
       try {
-        const verifier = createPhoneRecaptchaVerifier("phone-recaptcha-trigger");
+        const trigger = phoneButtonRef.current;
+        if (!trigger) throw new Error("Phone verification is not ready. Please try again.");
+        const verifier = createPhoneRecaptchaVerifier(trigger);
         recaptchaRef.current = verifier;
         const confirmation = await sendPhoneVerificationCode(
           `+91${digits}`,
