@@ -529,7 +529,7 @@ export function LoginClient() {
                 Terms
               </a>{" "}
               and{" "}
-              <a href="#" className="underline decoration-[#E8E5E0]/40 underline-offset-2 hover:text-[#1A1A1A] hover:decoration-[#1A1A1A]">
+              <a href="#" className="underline decoration-[#9A9A9A]/40 underline-offset-2 hover:text-[#1A1A1A] hover:decoration-[#1A1A1A]">
                 Privacy Policy
               </a>
               .
