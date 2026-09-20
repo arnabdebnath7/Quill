@@ -352,6 +352,7 @@ export function LoginClient() {
             transition={{ duration: 0.55, ease: EASE }}
             className="mt-10 flex flex-col"
           >
+            {/* Phone number → OTP stays on this route; only the auth panel transitions. */}
             <AnimatePresence mode="wait" initial={false}>
               {phoneStep === "number" ? (
                 <motion.div
