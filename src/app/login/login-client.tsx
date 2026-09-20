@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConfirmationResult, RecaptchaVerifier } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { FirebaseError } from "firebase/app";
 import { ThemeToggle } from "@/components/app-shell";
 import {
@@ -163,6 +163,7 @@ export function LoginClient() {
     "idle" | "sending" | "awaiting" | "verifying" | "failed"
   >("idle");
   const [error, setError] = useState<string | null>(null);
+  const [phoneStep, setPhoneStep] = useState<"number" | "otp">("number");
 
   const confirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
@@ -235,6 +236,7 @@ export function LoginClient() {
           verifier
         );
         confirmationRef.current = confirmation;
+        setPhoneStep("otp");
         setPhonePhase("awaiting");
       } catch (e) {
         setError(friendlyPhoneError(e));
@@ -245,32 +247,6 @@ export function LoginClient() {
     },
     [phase, resetPhoneVerifier]
   );
-
-  useEffect(() => {
-    if (phone.length !== 10) {
-      lastRequestedPhoneRef.current = "";
-      if (phone.length < 10 && phonePhase !== "idle") {
-        setOtp("");
-        setPhonePhase("idle");
-        confirmationRef.current = null;
-        resetPhoneVerifier();
-      }
-      return;
-    }
-
-    const canRequest =
-      phonePhase === "idle" ||
-      (phonePhase === "failed" && lastRequestedPhoneRef.current !== phone);
-
-    if (
-      phase === "idle" &&
-      canRequest &&
-      lastRequestedPhoneRef.current !== phone
-    ) {
-      lastRequestedPhoneRef.current = phone;
-      void requestPhoneCode(phone);
-    }
-  }, [phone, phonePhase, phase, requestPhoneCode, resetPhoneVerifier]);
 
   useEffect(() => {
     if (phonePhase === "awaiting" && otp.length === 6) {
@@ -318,6 +294,17 @@ export function LoginClient() {
     if (otp.length === 6) void verifyOtp(otp);
   };
 
+  const backToPhone = () => {
+    if (phonePhase === "sending" || phonePhase === "verifying") return;
+    setError(null);
+    setOtp("");
+    setPhoneStep("number");
+    setPhonePhase("idle");
+    confirmationRef.current = null;
+    lastRequestedPhoneRef.current = "";
+    resetPhoneVerifier();
+  };
+
   return (
     <div className="relative flex min-h-dvh flex-col bg-[#FEFDF9]">
       {/* Top bar - minimal like Claude */}
@@ -358,53 +345,130 @@ export function LoginClient() {
 
           <motion.div
             initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
+            animate={{
+              opacity: 1,
+              y: phoneStep === "otp" ? -54 : 0,
+            }}
+            transition={{ duration: 0.55, ease: EASE }}
             className="mt-10 flex flex-col"
           >
-            <div className="relative">
-              <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)] focus-within:border-[#E8E5E0] focus-within:ring-0 focus-within:outline-none">
-                <span className="shrink-0 text-[15px] font-[500] text-[#1A3B32]">+91</span>
-                <span className="mx-3 h-5 w-px bg-[#E8E5E0]" aria-hidden />
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={(e) => {
-                    setError(null);
-                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
-                  }}
-                  placeholder="Enter mobile number"
-                  aria-label="Mobile number"
-                  style={{
-                    outline: "none",
-                    boxShadow: "none",
-                    border: "0",
-                    background: "transparent",
-                    color: "#1A1A1A",
-                    caretColor: "#1A3B32",
-                    WebkitAppearance: "none",
-                    WebkitBoxShadow: "none",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                  className="min-w-0 flex-1 !appearance-none !border-0 !bg-transparent !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!bg-transparent focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!bg-transparent focus-visible:!outline-none focus-visible:!ring-0"
-                />
-              </div>
-
-              {phonePhase !== "idle" && (
+            <AnimatePresence mode="wait" initial={false}>
+              {phoneStep === "number" ? (
                 <motion.div
-                  initial={{ opacity: 0, y: 6 }}
+                  key="phone-number"
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4"
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.35, ease: EASE }}
+                  className="flex flex-col"
                 >
+                  <div className="relative">
+                    <div className="flex h-[48px] w-full items-center rounded-full border border-[#E8E5E0] bg-white px-5 shadow-[0_2px_8px_rgba(0,0,0,.06)] focus-within:border-[#E8E5E0] focus-within:ring-0 focus-within:outline-none">
+                      <span className="shrink-0 text-[15px] font-[500] text-[#1A3B32]">+91</span>
+                      <span className="mx-3 h-5 w-px bg-[#E8E5E0]" aria-hidden />
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(e) => {
+                          setError(null);
+                          setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+                        }}
+                        placeholder="Enter mobile number"
+                        aria-label="Mobile number"
+                        style={{
+                          outline: "none",
+                          boxShadow: "none",
+                          border: "0",
+                          background: "transparent",
+                          color: "#1A1A1A",
+                          caretColor: "#1A3B32",
+                          WebkitAppearance: "none",
+                          WebkitBoxShadow: "none",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                        className="min-w-0 flex-1 !appearance-none !border-0 !bg-transparent !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!bg-transparent focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!bg-transparent focus-visible:!outline-none focus-visible:!ring-0"
+                      />
+                    </div>
+                    <button
+                      id="phone-recaptcha-trigger"
+                      type="button"
+                      tabIndex={-1}
+                      aria-hidden
+                      className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void requestPhoneCode(phone)}
+                    disabled={phone.length !== 10 || phonePhase === "sending"}
+                    className="mt-5 flex h-[48px] w-full items-center justify-center rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {phonePhase === "sending" ? "Sending code…" : "Continue with phone"}
+                  </button>
+
+                  <div className="mt-5 flex items-center gap-3" aria-hidden>
+                    <span className="h-px flex-1 bg-[#E8E5E0]" />
+                    <span className="shrink-0 px-1 text-[12px] font-[500] text-[#A3A3A3]">or</span>
+                    <span className="h-px flex-1 bg-[#E8E5E0]" />
+                  </div>
+
+                  <button
+                    onClick={signIn}
+                    disabled={busy}
+                    className="group mt-5 flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
+                  >
+                    {busy ? (
+                      <motion.span
+                        className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                      />
+                    ) : (
+                      <GoogleMark />
+                    )}
+                    {phase === "exchange"
+                      ? "Opening your workspace…"
+                      : phase === "google"
+                      ? "Waiting for Google…"
+                      : "Continue with Google"}
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="phone-otp"
+                  initial={{ opacity: 0, y: 24 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -24 }}
+                  transition={{ duration: 0.45, ease: EASE }}
+                  className="flex flex-col"
+                >
+                  <div className="flex items-center justify-between px-1">
+                    <button
+                      type="button"
+                      onClick={backToPhone}
+                      className="text-[12px] font-[500] text-[#6B6B6B] transition-colors hover:text-[#1A3B32]"
+                    >
+                      Change number
+                    </button>
+                    <span className="text-[12px] text-[#9A9A9A]">
+                      +91 ••••••••{phone.slice(-2)}
+                    </span>
+                  </div>
+
                   <input
+                    autoFocus
                     type="tel"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={6}
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(e) => {
+                      setError(null);
+                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
+                    }}
                     placeholder="Enter verification code"
                     aria-label="Verification code"
                     style={{
@@ -418,7 +482,7 @@ export function LoginClient() {
                       WebkitBoxShadow: "none",
                       WebkitTapHighlightColor: "transparent",
                     }}
-                    className="flex h-[48px] w-full rounded-full border border-[#E8E5E0] bg-white px-5 text-center text-[15px] tracking-[0.28em] !appearance-none !outline-none !ring-0 !shadow-none focus:border-[#E8E5E0] focus:outline-none focus:ring-0 focus:shadow-none focus-visible:border-[#E8E5E0] focus-visible:outline-none focus-visible:ring-0"
+                    className="mt-4 flex h-[48px] w-full rounded-full border border-[#E8E5E0] bg-white px-5 text-center text-[15px] tracking-[0.28em] !appearance-none !outline-none !ring-0 !shadow-none focus:border-[#E8E5E0] focus:outline-none focus:ring-0 focus:shadow-none focus-visible:border-[#E8E5E0] focus-visible:outline-none focus-visible:ring-0"
                   />
 
                   <p className="mt-2 px-2 text-center text-[11px] text-[#9A9A9A]">
@@ -429,56 +493,24 @@ export function LoginClient() {
                       : "Code sent to +91 ••••••••" + phone.slice(-2)}
                   </p>
 
-                  {phonePhase === "failed" && confirmationRef.current && (
-                    <button
-                      type="button"
-                      onClick={manualVerify}
-                      disabled={otp.length !== 6}
-                      className="mt-3 h-[44px] w-full rounded-full border border-[#E8E5E0] bg-white px-6 text-[14px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Verify code
-                    </button>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {phonePhase === "failed" && (
+                      <motion.button
+                        type="button"
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={manualVerify}
+                        disabled={otp.length !== 6}
+                        className="mt-3 h-[44px] w-full rounded-full border border-[#E8E5E0] bg-white px-6 text-[14px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Verify code
+                      </motion.button>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
-
-              <button
-                id="phone-recaptcha-trigger"
-                type="button"
-                tabIndex={-1}
-                aria-hidden
-                className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
-              />
-            </div>
-
-            <div className="mt-6 flex flex-col gap-5">
-              <div className="flex items-center gap-3" aria-hidden>
-                <span className="h-px flex-1 bg-[#E8E5E0]" />
-                <span className="shrink-0 px-1 text-[12px] font-[500] text-[#A3A3A3]">or</span>
-                <span className="h-px flex-1 bg-[#E8E5E0]" />
-              </div>
-
-              <button
-                onClick={signIn}
-                disabled={busy}
-                className="group flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
-              >
-                {busy ? (
-                  <motion.span
-                    className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-                  />
-                ) : (
-                  <GoogleMark />
-                )}
-                {phase === "exchange"
-                  ? "Opening your workspace…"
-                  : phase === "google"
-                  ? "Waiting for Google…"
-                  : "Continue with Google"}
-              </button>
-            </div>
+            </AnimatePresence>
+          </motion.div>
 
             {error && (
               <motion.p
