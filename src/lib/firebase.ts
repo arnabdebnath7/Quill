@@ -3,7 +3,6 @@
 import { getApp, getApps, initializeApp, FirebaseError } from "firebase/app";
 import {
   getAuth,
-  initializeRecaptchaConfig,
   getRedirectResult,
   GoogleAuthProvider,
   OAuthProvider,
@@ -83,15 +82,17 @@ export function signInWithApple(): Promise<string> {
   return signInWithProvider(appleProvider);
 }
 
-/** Completes a redirect-based sign-in after the round trip to Google or Apple. */
-export async function createPhoneRecaptchaVerifier(
+/**
+ * Creates Firebase's standard invisible reCAPTCHA verifier.
+ *
+ * Do not call initializeRecaptchaConfig() here: that is the project-level
+ * reCAPTCHA Enterprise configuration path and is optional for the classic
+ * Firebase Phone Auth flow. Calling it can fail with "recaptcha key
+ * undefined" on projects that have not configured Enterprise.
+ */
+export function createPhoneRecaptchaVerifier(
   buttonId: string
-): Promise<RecaptchaVerifier> {
-  // Warm Firebase's reCAPTCHA configuration before the SMS request. This
-  // avoids the first-click race where the invisible verifier is created and
-  // immediately consumed before its configuration is ready.
-  await initializeRecaptchaConfig(auth);
-
+): RecaptchaVerifier {
   return new RecaptchaVerifier(auth, buttonId, {
     size: "invisible",
     callback: () => {},
