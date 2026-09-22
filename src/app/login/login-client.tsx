@@ -171,8 +171,6 @@ export function LoginClient() {
 
   const confirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
-  const phoneButtonRef = useRef<HTMLButtonElement | null>(null);
-  const lastRequestedPhoneRef = useRef("");
 
   const phoneBusy =
     phonePhase === "sending" ||
@@ -234,9 +232,7 @@ export function LoginClient() {
       resetPhoneVerifier();
 
       try {
-        const trigger = phoneButtonRef.current;
-        if (!trigger) throw new Error("Phone verification is not ready. Please try again.");
-        const verifier = createPhoneRecaptchaVerifier(trigger);
+        const verifier = createPhoneRecaptchaVerifier("phone-sign-in-button");
         recaptchaRef.current = verifier;
         const confirmation = await sendPhoneVerificationCode(
           `+91${digits}`,
@@ -308,7 +304,6 @@ export function LoginClient() {
     setPhoneStep("number");
     setPhonePhase("idle");
     confirmationRef.current = null;
-    lastRequestedPhoneRef.current = "";
     resetPhoneVerifier();
   };
 
@@ -399,16 +394,10 @@ export function LoginClient() {
                         className="min-w-0 flex-1 !appearance-none !border-0 !bg-transparent !outline-none !ring-0 !shadow-none placeholder:text-[#A3A3A3] focus:!border-0 focus:!bg-transparent focus:!outline-none focus:!ring-0 focus:!shadow-none focus-visible:!border-0 focus-visible:!bg-transparent focus-visible:!outline-none focus-visible:!ring-0"
                       />
                     </div>
-                    <button
-                      id="phone-recaptcha-trigger"
-                      type="button"
-                      tabIndex={-1}
-                      aria-hidden
-                      className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
-                    />
                   </div>
 
                   <button
+                    id="phone-sign-in-button"
                     type="button"
                     onClick={() => void requestPhoneCode(phone)}
                     disabled={phone.length !== 10 || phonePhase === "sending"}
