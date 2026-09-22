@@ -234,24 +234,13 @@ export function LoginClient() {
       try {
         const verifier =
           recaptchaRef.current ??
-          (await createPhoneRecaptchaVerifier("phone-sign-in-button"));
+          createPhoneRecaptchaVerifier("phone-sign-in-button");
         recaptchaRef.current = verifier;
-        await verifier.render();
 
-        const confirmation = await Promise.race([
-          sendPhoneVerificationCode(`+91${digits}`, verifier),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    "Phone verification timed out before Firebase returned a result."
-                  )
-                ),
-              20000
-            )
-          ),
-        ]);
+        const confirmation = await sendPhoneVerificationCode(
+          `+91${digits}`,
+          verifier
+        );
         confirmationRef.current = confirmation;
         setPhoneStep("otp");
         setPhonePhase("awaiting");
@@ -264,36 +253,6 @@ export function LoginClient() {
     },
     [phase, resetPhoneVerifier]
   );
-
-  useEffect(() => {
-    if (phoneStep !== "number" || typeof document === "undefined") return;
-
-    let cancelled = false;
-
-    const preload = async () => {
-      try {
-        const verifier = await createPhoneRecaptchaVerifier("phone-sign-in-button");
-        if (cancelled) {
-          verifier.clear();
-          return;
-        }
-        recaptchaRef.current = verifier;
-        await verifier.render();
-      } catch (e) {
-        if (!cancelled) {
-          setError(friendlyPhoneError(e));
-          resetPhoneVerifier();
-        }
-      }
-    };
-
-    void preload();
-
-    return () => {
-      cancelled = true;
-      resetPhoneVerifier();
-    };
-  }, [phoneStep, resetPhoneVerifier]);
 
   useEffect(() => {
     if (phonePhase === "awaiting" && otp.length === 6) {
