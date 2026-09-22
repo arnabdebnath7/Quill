@@ -84,9 +84,9 @@ export function signInWithApple(): Promise<string> {
 
 /** Completes a redirect-based sign-in after the round trip to Google or Apple. */
 export function createPhoneRecaptchaVerifier(
-  element: HTMLElement
+  buttonId: string
 ): RecaptchaVerifier {
-  return new RecaptchaVerifier(auth, element, {
+  return new RecaptchaVerifier(auth, buttonId, {
     size: "invisible",
   });
 }

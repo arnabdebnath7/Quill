@@ -1,15 +1,29 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { verifyFirebaseIdToken } from "@/lib/firebase-admin";
 import { createSession } from "@/lib/auth";
+
+const PHONE_EMAIL_DOMAIN = "auth.quill.local";
+
+function normalizeEmail(value: unknown) {
+  return typeof value === "string" ? value.toLowerCase().trim() : "";
+}
+
+function normalizeString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function phoneIdentityEmail(firebaseUid: string) {
+  return `firebase-${firebaseUid}@${PHONE_EMAIL_DOMAIN}`;
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const idToken =
-      typeof body?.idToken === "string" ? body.idToken : "";
+      typeof body?.idToken === "string" ? body.idToken.trim() : "";
 
     if (!idToken) {
       return NextResponse.json(
@@ -19,39 +33,101 @@ export async function POST(request: Request) {
     }
 
     const decoded = await verifyFirebaseIdToken(idToken);
+    const firebaseUid = normalizeString(decoded.uid);
+    const email = normalizeEmail(decoded.email);
+    const phone = normalizeString(decoded.phone_number);
+    const isPhoneAuth = Boolean(phone);
 
-    const email = decoded.email?.toLowerCase().trim();
-    if (!email) {
+    if (!firebaseUid) {
       return NextResponse.json(
-        { error: "This account has no email address." },
+        { error: "This Firebase account has no usable identity." },
+        { status: 400 }
+      );
+    }
+
+    const identityEmail = isPhoneAuth
+      ? phoneIdentityEmail(firebaseUid)
+      : email;
+
+    if (!identityEmail) {
+      return NextResponse.json(
+        { error: "This Firebase account has no usable email identity." },
         { status: 400 }
       );
     }
 
     const name =
-      decoded.name?.trim() || email.split("@")[0] || "Trader";
+      normalizeString(decoded.name) ||
+      (email ? email.split("@")[0] : null) ||
+      (phone ? phone.slice(-4) : null) ||
+      "Trader";
+
+    const conditions = isPhoneAuth
+      ? [eq(users.email, identityEmail)]
+      : [eq(users.email, email)];
+
+    // A linked Firebase phone+Google account can arrive with a phone claim
+    // and an email claim. Prefer the stable phone identity in that case.
+    if (isPhoneAuth && email) {
+      conditions.push(eq(users.email, email));
+    }
 
     const [existing] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(or(...conditions))
       .limit(1);
 
-    const user =
-      existing ??
-      (
-        await db
-          .insert(users)
-          .values({
-            email,
-            name,
-            image:
-              typeof decoded.picture === "string"
-                ? decoded.picture
-                : null,
-          })
-          .returning()
-      )[0];
+    let user = existing;
+
+    if (user) {
+      const updates: Partial<typeof users.$inferInsert> = {};
+
+      if (decoded.name && typeof decoded.name === "string" && user.name === "Trader") {
+        updates.name = decoded.name.trim();
+      }
+      if (
+        typeof decoded.picture === "string" &&
+        decoded.picture.trim() &&
+        !user.image
+      ) {
+        updates.image = decoded.picture.trim();
+      }
+
+      // Keep the existing database contract intact. Phone-only accounts use a
+      // deterministic internal email identity because the current users table
+      // requires a non-null email.
+      if (Object.keys(updates).length > 0) {
+        const [updated] = await db
+          .update(users)
+          .set(updates)
+          .where(eq(users.id, user.id))
+          .returning();
+
+        if (updated) user = updated;
+      }
+    } else {
+      const [created] = await db
+        .insert(users)
+        .values({
+          email: identityEmail,
+          name,
+          image:
+            typeof decoded.picture === "string"
+              ? decoded.picture.trim() || null
+              : null,
+        })
+        .returning();
+
+      user = created;
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Could not create the local user account." },
+        { status: 500 }
+      );
+    }
 
     await createSession(user.id);
 
