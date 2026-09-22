@@ -10,5 +10,5 @@ export async function verifyFirebaseIdToken(idToken: string) {
     issuer: ISSUER,
     audience: PROJECT_ID,
   });
-  return payload as { uid?: string; email?: string; phone_number?: string; name?: string; picture?: string; [key: string]: unknown };
+  return payload as { uid?: string; user_id?: string; email?: string; phone_number?: string; name?: string; picture?: string; [key: string]: unknown };
 }
