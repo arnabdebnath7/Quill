@@ -176,7 +176,7 @@ export function LoginClient() {
     phonePhase === "sending" ||
     phonePhase === "awaiting" ||
     phonePhase === "verifying";
-  const busy = phase !== "idle" || phoneBusy;
+  const googleBusy = phase !== "idle";
 
   const exchange = useCallback(
     async (idToken: string) => {
@@ -417,10 +417,10 @@ export function LoginClient() {
 
                   <button
                     onClick={signIn}
-                    disabled={busy}
+                    disabled={googleBusy}
                     className="group mt-5 flex h-[48px] w-full items-center justify-center gap-3 rounded-full border border-[#E8E5E0] bg-white px-6 text-[15px] font-[500] text-[#1A1A1A] shadow-[0_2px_8px_rgba(0,0,0,.06)] transition-all hover:border-[#D0CCC6] hover:bg-[#FFFEFB] active:scale-[0.98] disabled:opacity-60"
                   >
-                    {busy ? (
+                    {googleBusy ? (
                       <motion.span
                         className="h-[18px] w-[18px] rounded-full border-2 border-[#1A3B32]/20 border-t-[#1A3B32]"
                         animate={{ rotate: 360 }}
