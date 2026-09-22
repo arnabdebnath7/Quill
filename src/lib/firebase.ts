@@ -3,6 +3,7 @@
 import { getApp, getApps, initializeApp, FirebaseError } from "firebase/app";
 import {
   getAuth,
+  initializeRecaptchaConfig,
   getRedirectResult,
   GoogleAuthProvider,
   OAuthProvider,
@@ -83,11 +84,18 @@ export function signInWithApple(): Promise<string> {
 }
 
 /** Completes a redirect-based sign-in after the round trip to Google or Apple. */
-export function createPhoneRecaptchaVerifier(
+export async function createPhoneRecaptchaVerifier(
   buttonId: string
-): RecaptchaVerifier {
+): Promise<RecaptchaVerifier> {
+  // Warm Firebase's reCAPTCHA configuration before the SMS request. This
+  // avoids the first-click race where the invisible verifier is created and
+  // immediately consumed before its configuration is ready.
+  await initializeRecaptchaConfig(auth);
+
   return new RecaptchaVerifier(auth, buttonId, {
     size: "invisible",
+    callback: () => {},
+    "expired-callback": () => {},
   });
 }
 
