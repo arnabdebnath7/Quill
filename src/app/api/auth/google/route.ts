@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     const decoded = await verifyFirebaseIdToken(idToken);
-    // Firebase ID tokens carry the Firebase UID as `user_id` in the JWT.\n    // `uid` is available on Firebase Admin SDK user records, but not as the\n    // standard ID-token claim. Keep both for compatibility.\n    const firebaseUid = normalizeString(decoded.user_id) || normalizeString(decoded.uid);
+    // Firebase ID tokens carry the Firebase UID as `user_id` in the JWT.\n    // `uid` is available on Firebase Admin SDK user records, but not as the\n    // standard ID-token claim. Keep both for compatibility.\n    const claims = decoded as Record<string, unknown>;\n    const firebaseUid = normalizeString(claims.user_id) || normalizeString(claims.uid);
     const email = normalizeEmail(decoded.email);
     const phone = normalizeString(decoded.phone_number);
     const isPhoneAuth = Boolean(phone);
