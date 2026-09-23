@@ -33,7 +33,10 @@ export async function POST(request: Request) {
     }
 
     const decoded = await verifyFirebaseIdToken(idToken);
-    const firebaseUid = normalizeString((decoded as any).user_id) || normalizeString(decoded.uid);
+    const firebaseUid =
+      normalizeString(decoded.uid) ||
+      normalizeString((decoded as any).user_id) ||
+      normalizeString((decoded as any).sub);
     const email = normalizeEmail(decoded.email);
     const phone = normalizeString(decoded.phone_number);
     const isPhoneAuth = Boolean(phone);
