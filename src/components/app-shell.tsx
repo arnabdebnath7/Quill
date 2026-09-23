@@ -7,6 +7,7 @@ import { BarChart3, CalendarDays, CandlestickChart, Feather, LayoutDashboard, Lo
 import { useTheme } from "@/components/providers";
 import { Splash } from "@/components/splash";
 import { AppInstall } from "@/components/app-install";
+import { QuillLogoMark } from "@/components/quill-logo";
 import { Mimo } from "@/components/mimo";
 import { avatarHue, cn, initials } from "@/lib/utils";
 import type { User } from "@/db/schema";
@@ -27,8 +28,7 @@ const MOBILE_NAV=[
   {href:"/today",label:"Today",icon:CalendarDays},
   {href:"/trades",label:"Trades",icon:CandlestickChart},
   {href:"/journal",label:"Journal",icon:Feather},
-  {href:"/intelligence",label:"Mimo",icon:Mimo},
-  {href:"/journal",label:"Journal",icon:Feather}
+  {href:"/intelligence",label:"Mimo",icon:Mimo}
 ];
 const QUICK=[
   {href:"/trades?new=1",label:"Log trade",icon:CandlestickChart},
@@ -39,7 +39,7 @@ const QUICK=[
 
 export function Logo({size=30}:{size?:number}){
   return <motion.div whileHover={{rotate:-2,scale:1.02}} whileTap={{scale:.96}} className="relative flex items-center justify-center overflow-hidden rounded-[12px] bg-[#FAF6EB] shadow-[0_1px_2px_rgba(0,0,0,.06)]" style={{width:size,height:size}}>
-    <img src="/quill-icon.png" alt="Quill" className="h-full w-full object-contain p-[2px]" draggable={false} />
+    <QuillLogoMark size={size} className="h-full w-full" />
   </motion.div>
 }
 
@@ -66,7 +66,7 @@ export function AppShell({user,children}:{user:User;children:ReactNode}){
     <Splash/>
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[224px] flex-col border-r border-line bg-paper/92 backdrop-blur-xl md:flex">
       <div className="flex items-center gap-2.5 px-5 pb-7 pt-6"><Logo/><div><div className="font-display text-[17px] font-semibold tracking-[-.02em] leading-none">Quill</div><div className="mt-1 text-[10px] uppercase tracking-[.14em] text-faint">trade & life</div></div></div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3" aria-label="Main navigation">{NAV.map(item=>{const active=isActive(item.href);return <Link key={item.href} href={item.href} className={cn("group relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",active?"text-ink":"text-sub hover:text-ink")}>{active&&<motion.span layoutId="nav-pill" className="absolute inset-0 rounded-xl border border-line bg-card" transition={{type:"spring",bounce:.14,duration:.45}}/>}<motion.span whileTap={{scale:.82}} className="relative z-10 flex !h-[17px] !w-[17px] items-center"><item.icon className={cn("!h-[17px] !w-[17px] transition-colors",active?"text-brand":"text-faint group-hover:text-sub")} strokeWidth={active?2.1:1.8}/></motion.span><span className="relative z-10">{item.label}</span>{active&&<motion.span layoutId="nav-dot" className="relative z-10 ml-auto h-1.5 w-1.5 rounded-full bg-brand"/>}</Link>})}</nav>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3" aria-label="Main navigation">{NAV.map(item=>{const active=isActive(item.href);return <Link key={item.href} href={item.href} className={cn("group relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",active?"text-ink":"text-sub hover:text-ink")}>{active&&<motion.span layoutId="nav-pill" className="absolute inset-0 rounded-xl border border-line bg-line/35" transition={{type:"spring",bounce:.14,duration:.45}}/>}<motion.span whileTap={{scale:.82}} className="relative z-10 flex !h-[17px] !w-[17px] items-center"><item.icon className={cn("!h-[17px] !w-[17px] transition-colors",active?"text-brand":"text-faint group-hover:text-sub")} strokeWidth={active?2.1:1.8}/></motion.span><span className="relative z-10">{item.label}</span>{active&&<motion.span layoutId="nav-dot" className="relative z-10 ml-auto h-1.5 w-1.5 rounded-full bg-brand"/>}</Link>})}</nav>
       <div className="space-y-3 px-3 pb-5"><AppInstall/><div className="rounded-xl border border-line bg-card p-3"><div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-sub"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-up"/>Live sync on</div><p className="text-[11px] leading-relaxed text-faint">Your journal and trades stay synced to Quill.</p></div><UserChip user={user}/><div className="flex items-center gap-2"><ThemeToggle/><motion.button whileTap={{scale:.985}} onClick={signOut} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-[13px] font-medium text-sub transition-colors hover:bg-line/50 hover:text-ink cursor-pointer"><LogOut className="h-4 w-4"/>Sign out</motion.button></div></div>
     </aside>
 
@@ -83,7 +83,7 @@ export function AppShell({user,children}:{user:User;children:ReactNode}){
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/94 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl" aria-label="Primary mobile navigation">
       <div className="relative mx-auto grid max-w-xl grid-cols-5">
         <div className="col-span-2 grid grid-cols-2">{MOBILE_NAV.slice(0,2).map(item=>{const active=isActive(item.href);return <Link key={`${item.href}-${item.label}`} href={item.href} className="relative flex min-h-16 flex-col items-center justify-center gap-1 py-2">{active&&<motion.span layoutId="mnav-left" className="absolute top-0 h-0.5 w-8 rounded-full bg-brand" transition={{type:"spring",bounce:.18,duration:.42}}/>}<motion.span whileTap={{scale:.78}} className="flex !h-[22px] !w-[22px]"><item.icon className={cn("!h-[22px] !w-[22px]",active?"text-brand":"text-faint")} strokeWidth={active?2.15:1.85}/></motion.span><span className={cn("text-[9px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>})}</div>
-        <div className="relative flex items-center justify-center"><motion.button whileTap={{scale:.9}} animate={quickOpen?{rotate:45}:{rotate:0}} transition={{type:"spring",stiffness:420,damping:24}} onClick={()=>setQuickOpen(v=>!v)} aria-label={quickOpen?"Close quick actions":"Open quick actions"} className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-paper bg-brandsolid text-brandon shadow-lg shadow-black/10"><Plus className="h-6 w-6" strokeWidth={2.25}/></motion.button></div>
+        <div className="relative flex items-center justify-center"><motion.button whileTap={{scale:.9}} animate={quickOpen?{rotate:45}:{rotate:0}} transition={{type:"spring",stiffness:420,damping:24}} onClick={()=>setQuickOpen(v=>!v)} aria-label={quickOpen?"Close quick actions":"Open quick actions"} className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-paper bg-brandsolid text-[#FAF6EB] shadow-lg shadow-black/10"><Plus className="h-6 w-6" strokeWidth={2.25}/></motion.button></div>
         <div className="col-span-2 grid grid-cols-2">{MOBILE_NAV.slice(2,4).map(item=>{const active=isActive(item.href);return <Link key={`${item.href}-${item.label}`} href={item.href} className="relative flex min-h-16 flex-col items-center justify-center gap-1 py-2">{active&&<motion.span layoutId="mnav-right" className="absolute top-0 h-0.5 w-8 rounded-full bg-brand" transition={{type:"spring",bounce:.18,duration:.42}}/>}<motion.span whileTap={{scale:.78}} className="flex !h-[22px] !w-[22px]">{item.icon===Mimo?<MobileMimo/>:<item.icon className={cn("!h-[22px] !w-[22px]",active?"text-brand":"text-faint")} strokeWidth={active?2.15:1.85}/>}</motion.span><span className={cn("text-[9px] font-medium",active?"text-ink":"text-faint")}>{item.label}</span></Link>})}</div>
       </div>
     </nav>
