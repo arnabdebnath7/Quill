@@ -3,7 +3,7 @@
   "appName": "Quill",
   "webDir": "out",
   "server": {
-    "url": "https://quill-arnabdebnath7.vercel.app",
+    "url": "https://quill-nine.vercel.app",
     "cleartext": false
   },
   "android": {
