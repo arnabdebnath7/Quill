@@ -1,19 +1,24 @@
-import { pgTable, text, uuid, timestamp, numeric, integer, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, numeric, integer, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   image: text("image"),
+  /** Firebase Authentication uid — the stable identity for every sign-in method. */
+  firebaseUid: text("firebase_uid").unique(),
+  /** E.164 phone number when the account was created or linked via phone OTP. */
+  phone: text("phone"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const sessions = pgTable("sessions", {
+  /** sha256 hex digest of the cookie value — the raw token is never stored. */
   token: text("token").primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [index("sessions_user_id_idx").on(table.userId)]);
 
 export const trades = pgTable("trades", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -45,7 +50,7 @@ export const trades = pgTable("trades", {
   rulesFollowed: boolean("rules_followed"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [index("trades_user_id_idx").on(table.userId)]);
 
 export const journalEntries = pgTable("journal_entries", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -58,7 +63,7 @@ export const journalEntries = pgTable("journal_entries", {
   pinned: boolean("pinned").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [index("journal_entries_user_id_idx").on(table.userId)]);
 
 export const watchlist = pgTable("watchlist", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -67,7 +72,7 @@ export const watchlist = pgTable("watchlist", {
   name: text("name").notNull(),
   market: text("market").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [index("watchlist_user_id_idx").on(table.userId)]);
 
 export const dailyCheckins = pgTable("daily_checkins", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -82,7 +87,7 @@ export const dailyCheckins = pgTable("daily_checkins", {
   reflection: text("reflection").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ dateUserUnique: uniqueIndex("daily_checkins_user_date_idx").on(table.userId, table.date) }));
+}, (table) => [uniqueIndex("daily_checkins_user_date_idx").on(table.userId, table.date)]);
 
 export type User = typeof users.$inferSelect;
 export type Trade = typeof trades.$inferSelect;

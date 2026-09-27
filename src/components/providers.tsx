@@ -1,45 +1,117 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
-type Theme = "light" | "dark" | "system";
-const ThemeCtx = createContext<{ theme: Theme; resolved: "light" | "dark"; setTheme: (t: Theme) => void }>({ theme: "dark", resolved: "dark", setTheme: () => {} });
+export type Theme = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
 
-function apply(theme: Theme) {
-  const dark = theme === "system" ? window.matchMedia("(prefers-color-scheme: dark)").matches : theme === "dark";
-  document.documentElement.classList.toggle("dark", dark);
-  document.documentElement.style.colorScheme = dark ? "dark" : "light";
-  return dark ? "dark" : "light";
+export const THEME_STORAGE_KEY = "quill-theme";
+const DEFAULT_THEME: Theme = "dark";
+const MEDIA_QUERY = "(prefers-color-scheme: dark)";
+
+/* ---------- theme store (localStorage + system preference) ---------- */
+
+const listeners = new Set<() => void>();
+
+function notify() {
+  listeners.forEach((listener) => listener());
 }
+
+function readTheme(): Theme {
+  try {
+    const raw = localStorage.getItem(THEME_STORAGE_KEY);
+    return raw === "light" || raw === "dark" || raw === "system" ? raw : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function resolve(theme: Theme): ResolvedTheme {
+  if (theme !== "system") return theme;
+  return window.matchMedia(MEDIA_QUERY).matches ? "dark" : "light";
+}
+
+function snapshot(): string {
+  const theme = readTheme();
+  return `${theme}:${resolve(theme)}`;
+}
+
+function serverSnapshot(): string {
+  return `${DEFAULT_THEME}:${DEFAULT_THEME}`;
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  const media = window.matchMedia(MEDIA_QUERY);
+  media.addEventListener("change", listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    media.removeEventListener("change", listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function writeTheme(theme: Theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Private mode / storage disabled — the theme still applies for this page load.
+  }
+  notify();
+}
+
+/** Hook consumed by the toggle and anything that needs to know the active theme. */
+export function useTheme() {
+  const state = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const [theme, resolved] = state.split(":") as [Theme, ResolvedTheme];
+
+  const setTheme = useCallback((next: Theme) => {
+    const root = document.documentElement;
+    root.classList.add("theme-switching");
+    window.setTimeout(() => root.classList.remove("theme-switching"), 360);
+    writeTheme(next);
+  }, []);
+
+  return useMemo(() => ({ theme, resolved, setTheme }), [theme, resolved, setTheme]);
+}
+
+/** Keeps the `dark` class on <html> in sync with the store (the inline boot script handles first paint). */
+function ThemeSync() {
+  const { resolved } = useTheme();
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", resolved === "dark");
+    root.style.colorScheme = resolved;
+  }, [resolved]);
+  return null;
+}
+
+/* ---------- providers ---------- */
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false } } }));
-  const [theme, setThemeState] = useState<Theme>("dark");
-  const [resolved, setResolved] = useState<"light" | "dark">("dark");
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false } } }),
+  );
 
-  useEffect(() => {
-    const savedRaw = localStorage.getItem("quill-theme");
-    const saved: Theme = savedRaw === "light" || savedRaw === "system" || savedRaw === "dark" ? savedRaw : "dark";
-    setThemeState(saved);
-    setResolved(apply(saved));
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setThemeState(current => { if (current === "system") setResolved(apply("system")); return current; });
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-
-  const setTheme = useCallback((t: Theme) => {
-    localStorage.setItem("quill-theme", t);
-    document.documentElement.classList.add("theme-switching");
-    setThemeState(t);
-    setResolved(apply(t));
-    window.setTimeout(() => document.documentElement.classList.remove("theme-switching"), 360);
-  }, []);
-
-  const value = useMemo(() => ({ theme, resolved, setTheme }), [theme, resolved, setTheme]);
-  return <ThemeCtx.Provider value={value}><QueryClientProvider client={client}>{children}<Toaster position="bottom-right" toastOptions={{ style: { background: "var(--card)", color: "var(--ink)", border: "1px solid var(--line)", boxShadow: "var(--shadow)", fontFamily: "var(--font-inter), sans-serif" } }} /></QueryClientProvider></ThemeCtx.Provider>;
+  return (
+    <QueryClientProvider client={client}>
+      <ThemeSync />
+      {children}
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "var(--card)",
+            color: "var(--ink)",
+            border: "1px solid var(--line)",
+            boxShadow: "var(--shadow)",
+            fontFamily: "var(--font-inter), sans-serif",
+          },
+        }}
+      />
+    </QueryClientProvider>
+  );
 }
-
-export function useTheme() { return useContext(ThemeCtx); }

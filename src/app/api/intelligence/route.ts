@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, gte } from "drizzle-orm";
-import { db } from "@/db";
-import { dailyCheckins, journalEntries, trades } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { buildIntelligence } from "@/lib/intelligence";
+import { loadIntelligence, sanitizeTimeZone } from "@/lib/intelligence-data";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const checkinCutoff = new Date();
-  checkinCutoff.setDate(checkinCutoff.getDate() - 120);
-
-  const [userTrades, checkins, journals] = await Promise.all([
-    db.select().from(trades).where(eq(trades.userId, user.id)).orderBy(desc(trades.entryAt)),
-    db.select().from(dailyCheckins).where(and(eq(dailyCheckins.userId, user.id), gte(dailyCheckins.date, checkinCutoff.toISOString().slice(0, 10)))).orderBy(desc(dailyCheckins.date)),
-    db.select().from(journalEntries).where(eq(journalEntries.userId, user.id)).orderBy(desc(journalEntries.createdAt)),
-  ]);
-
-  return NextResponse.json({ intelligence: buildIntelligence({ trades: userTrades, checkins, journals }) });
+  try {
+    const timeZone = sanitizeTimeZone(new URL(request.url).searchParams.get("tz"));
+    const intelligence = await loadIntelligence(user.id, timeZone);
+    return NextResponse.json({ intelligence }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("[intelligence] failed", error);
+    return NextResponse.json({ error: "Could not build your intelligence report right now." }, { status: 500 });
+  }
 }

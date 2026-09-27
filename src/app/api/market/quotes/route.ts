@@ -1,28 +1,29 @@
 import { NextResponse } from "next/server";
-import { findInstrument, marketOf, type MarketKey } from "@/lib/markets";
+import { requireUser } from "@/lib/auth";
+import { findInstrument, isMarketKey, marketOf, type MarketKey, type Quote, type QuotesMap } from "@/lib/markets";
 import { fetchCoingecko, fetchYahoo } from "@/lib/quote-server";
 
 export const dynamic = "force-dynamic";
 
-export interface Quote {
-  symbol: string;
-  market: string;
-  name: string;
-  price: number;
-  changePct: number; // vs previous close
-  currency: string;
-  live: boolean;
-  ts: number;
-}
-
-type QuoteMap = Record<string, Quote>;
-
-// Small server cache so a full dashboard polls don't hammer free APIs.
+// Small server cache so a dashboard full of widgets doesn't hammer the free providers.
 const CACHE_TTL = 20_000;
 const cache = new Map<string, { at: number; quote: Quote }>();
 
-/** Deterministic synthetic quote so the app never renders empty numbers offline. */
-function synthetic(symbol: string): { price: number; changePct: number } {
+// Provider outages are expected now and then; log them at most once a minute instead of on every poll.
+let lastOutageLog = 0;
+function noteOutage(provider: string, error: unknown) {
+  const now = Date.now();
+  if (now - lastOutageLog < 60_000) return;
+  lastOutageLog = now;
+  console.warn(`[market/quotes] ${provider} unreachable — serving estimates`, error instanceof Error ? error.message : error);
+}
+
+/**
+ * Deterministic estimate used only when a provider is unreachable, so charts
+ * and P&L previews don't collapse to zero. Always flagged with `live: false`
+ * and rendered as "est." by the UI — never offered as a fill price.
+ */
+function estimate(symbol: string): { price: number; changePct: number } {
   const anchors: Record<string, number> = {
     BTCUSD: 118500, ETHUSD: 4450, SOLUSD: 213, BNBUSD: 985, XRPUSD: 2.85, DOGEUSD: 0.24,
     XAUUSD: 3920, XAGUSD: 47.2, XPTUSD: 1580,
@@ -38,85 +39,74 @@ function synthetic(symbol: string): { price: number; changePct: number } {
   return { price: base * (1 + wave), changePct: wave * 40 };
 }
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const raw = url.searchParams.get("symbols") ?? "";
-  const requested = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 40)
-    .map((pair) => {
-      const [market, symbol] = pair.includes(":") ? pair.split(":") : ["us", pair];
-      return { market: market as MarketKey, symbol: symbol.toUpperCase() };
-    });
+type Requested = { key: string; market: MarketKey; symbol: string };
 
+function parseSymbols(raw: string): Requested[] {
+  const seen = new Set<string>();
+  const out: Requested[] = [];
+  for (const pair of raw.split(",")) {
+    const trimmed = pair.trim();
+    if (!trimmed) continue;
+    const [marketPart, symbolPart] = trimmed.includes(":") ? trimmed.split(":", 2) : ["us", trimmed];
+    const market = marketPart.toLowerCase();
+    const symbol = symbolPart.toUpperCase().replace(/[^A-Z0-9.=\-]/g, "").slice(0, 16);
+    if (!isMarketKey(market) || !symbol) continue;
+    const key = `${market}:${symbol}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, market, symbol });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+export async function GET(req: Request) {
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const requested = parseSymbols(url.searchParams.get("symbols") ?? "");
   const now = Date.now();
-  const out: QuoteMap = {};
-  const toFetch: { key: string; market: MarketKey; symbol: string; pid: string; provider: string }[] = [];
+  const out: QuotesMap = {};
+  const toFetch: (Requested & { pid: string; provider: "yahoo" | "coingecko"; name: string })[] = [];
 
   for (const r of requested) {
-    const key = `${r.market}:${r.symbol}`;
-    const inst = findInstrument(r.symbol, r.market);
-    const cached = cache.get(key);
+    const cached = cache.get(r.key);
     if (cached && now - cached.at < CACHE_TTL) {
-      out[key] = cached.quote;
+      out[r.key] = cached.quote;
       continue;
     }
+    const inst = findInstrument(r.symbol, r.market);
     if (!inst) {
-      const s = synthetic(r.symbol);
-      out[key] = {
-        symbol: r.symbol,
-        market: r.market,
-        name: r.symbol,
-        price: s.price,
-        changePct: s.changePct,
-        currency: marketOf(r.market).currency,
-        live: false,
-        ts: now,
-      };
+      const e = estimate(r.symbol);
+      out[r.key] = { symbol: r.symbol, market: r.market, name: r.symbol, price: e.price, changePct: e.changePct, currency: marketOf(r.market).currency, live: false, ts: now };
       continue;
     }
-    toFetch.push({ key, market: r.market, symbol: r.symbol, pid: inst.pid, provider: inst.provider });
+    toFetch.push({ ...r, pid: inst.pid, provider: inst.provider, name: inst.name });
   }
 
   const cgBatch = toFetch.filter((t) => t.provider === "coingecko");
   const yahooItems = toFetch.filter((t) => t.provider === "yahoo");
 
-  const results = await Promise.allSettled([
-    fetchCoingecko(cgBatch.map((t) => t.pid)),
-    ...yahooItems.map((t) => fetchYahoo(t.pid)),
-  ]);
+  const [cgResult, ...yahooResults] = await Promise.allSettled([fetchCoingecko(cgBatch.map((t) => t.pid)), ...yahooItems.map((t) => fetchYahoo(t.pid))]);
+  const cgData = cgResult.status === "fulfilled" ? cgResult.value : {};
+  if (cgBatch.length && cgResult.status === "rejected") noteOutage("CoinGecko", cgResult.reason);
+  const yahooFailure = yahooResults.find((r) => r.status === "rejected");
+  if (yahooFailure && yahooFailure.status === "rejected") noteOutage("Yahoo Finance", yahooFailure.reason);
 
-  const resolve = (
-    item: (typeof toFetch)[number],
-    data: { price: number; changePct: number } | undefined
-  ) => {
-    const d = data ?? synthetic(item.symbol);
-    const inst = findInstrument(item.symbol, item.market);
-    const quote: Quote = {
-      symbol: item.symbol,
-      market: item.market,
-      name: inst?.name ?? item.symbol,
-      price: d.price,
-      changePct: d.changePct,
-      currency: marketOf(item.market).currency,
-      live: Boolean(data),
-      ts: now,
-    };
+  const resolve = (item: (typeof toFetch)[number], data: { price: number; changePct: number } | undefined) => {
+    const d = data ?? estimate(item.symbol);
+    const quote: Quote = { symbol: item.symbol, market: item.market, name: item.name, price: d.price, changePct: d.changePct, currency: marketOf(item.market).currency, live: Boolean(data), ts: now };
     out[item.key] = quote;
-    cache.set(item.key, { at: now, quote });
+    // Estimates are cached briefly too, so a flapping provider isn't retried on every poll.
+    cache.set(item.key, { at: data ? now : now - CACHE_TTL / 2, quote });
   };
 
-  const [cgRes, ...yahooRes] = results;
-  const cgData = cgRes.status === "fulfilled" ? cgRes.value : {};
   cgBatch.forEach((t) => resolve(t, cgData[t.pid]));
-  yahooItems.forEach((t, i) =>
-    resolve(t, yahooRes[i]?.status === "fulfilled" ? (yahooRes[i] as PromiseFulfilledResult<{ price: number; changePct: number }>).value : undefined)
-  );
+  yahooItems.forEach((t, i) => {
+    const result = yahooResults[i];
+    resolve(t, result?.status === "fulfilled" ? result.value : undefined);
+  });
 
-  return NextResponse.json(
-    { quotes: out, ts: now },
-    { headers: { "Cache-Control": "no-store" } }
-  );
+  return NextResponse.json({ quotes: out, ts: now }, { headers: { "Cache-Control": "no-store" } });
 }

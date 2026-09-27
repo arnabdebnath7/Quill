@@ -43,7 +43,7 @@ export function num(v: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Directional trade P&L after fees */
+/** Directional trade P&L after fees, in the trade's own currency. */
 export function tradePnl(t: {
   side: string;
   quantity: string | number;
@@ -70,8 +70,34 @@ export function tradePnlPct(t: {
   return ((exit - entry) / entry) * 100 * dir;
 }
 
-export function todayKey(d = new Date()): string {
-  return d.toISOString().slice(0, 10);
+/** Calendar date of `value` in the *local* timezone as YYYY-MM-DD (never UTC-shifted). */
+export function localDateKey(value: Date | string | number = new Date()): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Value for a `datetime-local` input (local wall-clock, minute precision). */
+export function toDateTimeLocal(value: Date | string | number): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Turns the value of a `datetime-local`/`date` input into an ISO timestamp.
+ * A bare date is anchored at local noon so it stays on the same calendar day
+ * in every timezone (midnight UTC would show as the previous day in the Americas).
+ */
+export function inputToIso(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? new Date(`${trimmed}T12:00:00`) : new Date(trimmed);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 export function initials(name: string): string {

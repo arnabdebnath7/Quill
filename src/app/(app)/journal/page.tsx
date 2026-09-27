@@ -1,24 +1,12 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  CloudRain,
-  Feather,
-  Frown,
-  Laugh,
-  Meh,
-  PenLine,
-  Pin,
-  PinOff,
-  Search,
-  Smile,
-  Trash2,
-} from "lucide-react";
+import { CloudRain, Feather, Frown, Laugh, Meh, PenLine, Pin, PinOff, Search, Smile, Trash2 } from "lucide-react";
 import { useCreateEntry, useDeleteEntry, useJournal, useUpdateEntry } from "@/lib/hooks";
-import { cn } from "@/lib/utils";
+import { cn, localDateKey } from "@/lib/utils";
 import { Button, Dialog, EmptyState, Field, Input, Select, Textarea, Skeleton, Badge } from "@/components/ui";
 import type { JournalEntry } from "@/db/schema";
 
@@ -34,25 +22,25 @@ const MOODS: Record<string, { icon: React.ElementType; label: string; color: str
 
 function JournalInner() {
   const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [mood, setMood] = useState("all");
-  const [editorOpen, setEditorOpen] = useState(false);
+  // `?new=1` opens the editor once; the flag is then removed so a refresh doesn't reopen it.
+  const [editorOpen, setEditorOpen] = useState(() => params.get("new") === "1");
   const [reading, setReading] = useState<JournalEntry | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [deleting, setDeleting] = useState<JournalEntry | null>(null);
 
   const { data: entries, isLoading } = useJournal({ q: debouncedQ, mood });
-  const updateEntry = useUpdateEntry();
   const deleteEntry = useDeleteEntry();
+  // Always read the freshest copy of the open entry so pin/edit changes show up immediately.
+  const readingLive = useMemo(() => (reading ? ((entries ?? []).find((e) => e.id === reading.id) ?? reading) : null), [entries, reading]);
 
   useEffect(() => {
-    if (params.get("new") === "1") {
-      setReading(null);
-      setEditMode(false);
-      setEditorOpen(true);
-    }
-  }, [params]);
+    if (params.get("new") === "1") router.replace(pathname, { scroll: false });
+  }, [params, pathname, router]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
@@ -74,8 +62,8 @@ function JournalInner() {
     const days = new Set((entries ?? []).map((e) => e.date));
     let s = 0;
     const c = new Date();
-    if (!days.has(c.toISOString().slice(0, 10))) c.setDate(c.getDate() - 1);
-    while (days.has(c.toISOString().slice(0, 10))) {
+    if (!days.has(localDateKey(c))) c.setDate(c.getDate() - 1);
+    while (days.has(localDateKey(c))) {
       s++;
       c.setDate(c.getDate() - 1);
     }
@@ -88,10 +76,23 @@ function JournalInner() {
         <div>
           <h1 className="font-display text-[27px] font-semibold tracking-[-0.02em]">Journal</h1>
           <p className="mt-1 text-[13px] text-sub">
-            {entries?.length ?? 0} entries{streak > 0 && <> · <span className="font-medium text-brand">{streak}-day streak</span></>} · the market analysis is free, the self-knowledge is priceless
+            {entries?.length ?? 0} entries
+            {streak > 0 && (
+              <>
+                {" "}
+                · <span className="font-medium text-brand">{streak}-day streak</span>
+              </>
+            )}{" "}
+            · the market analysis is free, the self-knowledge is priceless
           </p>
         </div>
-        <Button onClick={() => { setReading(null); setEditMode(false); setEditorOpen(true); }}>
+        <Button
+          onClick={() => {
+            setReading(null);
+            setEditMode(false);
+            setEditorOpen(true);
+          }}
+        >
           <Feather className="h-4 w-4" /> New entry
         </Button>
       </div>
@@ -103,20 +104,36 @@ function JournalInner() {
         </div>
         <Select className="sm:w-44" value={mood} onChange={(e) => setMood(e.target.value)}>
           <option value="all">All moods</option>
-          {Object.entries(MOODS).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+          {Object.entries(MOODS).map(([k, m]) => (
+            <option key={k} value={k}>
+              {m.label}
+            </option>
+          ))}
         </Select>
       </div>
 
       {isLoading ? (
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 [&>*]:mb-4">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className={i % 3 === 0 ? "h-44" : "h-32"} />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className={i % 3 === 0 ? "h-44" : "h-32"} />
+          ))}
         </div>
       ) : (entries ?? []).length === 0 ? (
         <EmptyState
           icon={<Feather className="h-5 w-5" />}
           title={debouncedQ || mood !== "all" ? "Nothing matches" : "A blank page is a good sign"}
-          body={debouncedQ || mood !== "all" ? "Try a different search or mood filter." : "Five honest sentences a day beats a perfect essay once a month. Start with today."}
-          action={!(debouncedQ || mood !== "all") && <Button onClick={() => setEditorOpen(true)}><Feather className="h-4 w-4" /> Write today's entry</Button>}
+          body={
+            debouncedQ || mood !== "all"
+              ? "Try a different search or mood filter."
+              : "Five honest sentences a day beats a perfect essay once a month. Start with today."
+          }
+          action={
+            !(debouncedQ || mood !== "all") && (
+              <Button onClick={() => setEditorOpen(true)}>
+                <Feather className="h-4 w-4" /> Write today&apos;s entry
+              </Button>
+            )
+          }
         />
       ) : (
         <div className="space-y-7">
@@ -136,7 +153,10 @@ function JournalInner() {
                       className="mb-4 break-inside-avoid"
                     >
                       <button
-                        onClick={() => { setReading(e); setEditMode(false); }}
+                        onClick={() => {
+                          setReading(e);
+                          setEditMode(false);
+                        }}
                         className="block w-full rounded-2xl border border-line bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -146,7 +166,10 @@ function JournalInner() {
                           </div>
                           {e.mood && MOODS[e.mood] && (
                             <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg", MOODS[e.mood].bg)}>
-                              {(() => { const I = MOODS[e.mood!].icon; return <I className={cn("h-3.5 w-3.5", MOODS[e.mood!].color)} />; })()}
+                              {(() => {
+                                const I = MOODS[e.mood!].icon;
+                                return <I className={cn("h-3.5 w-3.5", MOODS[e.mood!].color)} />;
+                              })()}
                             </span>
                           )}
                         </div>
@@ -154,7 +177,9 @@ function JournalInner() {
                         <p className="mt-2 line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-sub">{e.content}</p>
                         {e.tags.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-1.5">
-                            {e.tags.slice(0, 4).map((t) => <Badge key={t}>#{t}</Badge>)}
+                            {e.tags.slice(0, 4).map((t) => (
+                              <Badge key={t}>#{t}</Badge>
+                            ))}
                           </div>
                         )}
                       </button>
@@ -169,30 +194,27 @@ function JournalInner() {
 
       {/* Reader / edit dialog */}
       <EntryDialog
-        open={reading != null && !editorOpen}
-        entry={reading}
+        open={readingLive != null && !editorOpen}
+        entry={readingLive}
         editMode={editMode}
         setEditMode={setEditMode}
         onClose={() => setReading(null)}
-        onDelete={() => { setDeleting(reading); }}
+        onDelete={() => {
+          setDeleting(readingLive);
+        }}
       />
 
       {/* New entry dialog */}
-      <EntryDialog
-        open={editorOpen}
-        entry={null}
-        editMode
-        setEditMode={() => {}}
-        onClose={() => setEditorOpen(false)}
-        onDelete={() => {}}
-      />
+      <EntryDialog open={editorOpen} entry={null} editMode setEditMode={() => {}} onClose={() => setEditorOpen(false)} onDelete={() => {}} />
 
       <Dialog open={deleting != null} onClose={() => setDeleting(null)} title="Delete this entry?">
         <p className="text-[13.5px] leading-relaxed text-sub">
-          “{deleting?.title}” will be gone for good. Memories fade — that's why you write them down. Sure?
+          “{deleting?.title}” will be gone for good. Memories fade — that&apos;s why you write them down. Sure?
         </p>
         <div className="mt-5 flex justify-end gap-2.5">
-          <Button variant="ghost" onClick={() => setDeleting(null)}>Keep it</Button>
+          <Button variant="ghost" onClick={() => setDeleting(null)}>
+            Keep it
+          </Button>
           <Button
             variant="danger"
             loading={deleteEntry.isPending}
@@ -227,9 +249,6 @@ function EntryDialog({
   onDelete: () => void;
 }) {
   const isNew = entry == null;
-  if (!open && entry == null && isNew) {
-    // still render for creation
-  }
   return (
     <Dialog open={open} onClose={onClose} title={isNew ? "New entry" : editMode ? "Edit entry" : "Journal entry"} wide>
       {isNew || editMode ? (
@@ -240,27 +259,39 @@ function EntryDialog({
             <span className="tabular">{format(new Date(entry.date + "T12:00:00"), "EEEE, MMMM d, yyyy")}</span>
             {entry.mood && MOODS[entry.mood] && (
               <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", MOODS[entry.mood].bg, MOODS[entry.mood].color)}>
-                {(() => { const I = MOODS[entry.mood!].icon; return <I className="h-3 w-3" />; })()}
+                {(() => {
+                  const I = MOODS[entry.mood!].icon;
+                  return <I className="h-3 w-3" />;
+                })()}
                 {MOODS[entry.mood].label}
               </span>
             )}
           </div>
           <h2 className="mt-2.5 font-display text-[22px] font-semibold tracking-[-0.02em]">{entry.title}</h2>
           <div className="mt-4 space-y-3.5">
-            {entry.content.split(/\n+/).filter(Boolean).map((p, i) => (
-              <p key={i} className="text-[14px] leading-[1.75] text-ink/85">{p}</p>
-            ))}
+            {entry.content
+              .split(/\n+/)
+              .filter(Boolean)
+              .map((p, i) => (
+                <p key={i} className="text-[14px] leading-[1.75] text-ink/85">
+                  {p}
+                </p>
+              ))}
           </div>
           {entry.tags.length > 0 && (
             <div className="mt-5 flex flex-wrap gap-1.5">
-              {entry.tags.map((t) => <Badge key={t}>#{t}</Badge>)}
+              {entry.tags.map((t) => (
+                <Badge key={t}>#{t}</Badge>
+              ))}
             </div>
           )}
           <div className="mt-6 flex items-center justify-between border-t border-line pt-4">
-            <DeleteButton entry={entry} onDelete={onDelete} />
+            <DeleteButton onDelete={onDelete} />
             <div className="flex gap-2">
               <PinButton entry={entry} />
-              <Button variant="outline" onClick={() => setEditMode(true)}><PenLine className="h-4 w-4" /> Edit</Button>
+              <Button variant="outline" onClick={() => setEditMode(true)}>
+                <PenLine className="h-4 w-4" /> Edit
+              </Button>
             </div>
           </div>
         </div>
@@ -272,14 +303,18 @@ function EntryDialog({
 function PinButton({ entry }: { entry: JournalEntry }) {
   const updateEntry = useUpdateEntry();
   return (
-    <Button variant="ghost" onClick={() => updateEntry.mutate({ id: entry.id, pinned: !entry.pinned })}>
+    <Button
+      variant="ghost"
+      aria-label={entry.pinned ? "Unpin entry" : "Pin entry"}
+      loading={updateEntry.isPending}
+      onClick={() => updateEntry.mutate({ id: entry.id, pinned: !entry.pinned })}
+    >
       {entry.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
     </Button>
   );
 }
 
-function DeleteButton({ entry, onDelete }: { entry: JournalEntry; onDelete: () => void }) {
-  void entry;
+function DeleteButton({ onDelete }: { onDelete: () => void }) {
   return (
     <Button variant="ghost" className="text-down hover:bg-down-soft" onClick={onDelete}>
       <Trash2 className="h-4 w-4" /> Delete
@@ -292,7 +327,7 @@ function EntryEditor({ entry, onClose }: { entry: JournalEntry | null; onClose: 
   const updateEntry = useUpdateEntry();
   const [title, setTitle] = useState(entry?.title ?? "");
   const [content, setContent] = useState(entry?.content ?? "");
-  const [date, setDate] = useState(entry?.date ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(entry?.date ?? localDateKey());
   const [mood, setMood] = useState<string | null>(entry?.mood ?? null);
   const [tags, setTags] = useState((entry?.tags ?? []).join(", "));
   const [error, setError] = useState<string | null>(null);
@@ -300,12 +335,16 @@ function EntryEditor({ entry, onClose }: { entry: JournalEntry | null; onClose: 
 
   const submit = async () => {
     if (!title.trim()) return setError("Give the day a headline — even a small one.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return setError("Pick a valid date.");
     const payload = {
       title: title.trim(),
       content,
       date,
       mood,
-      tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+      tags: tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
     };
     try {
       if (entry) {
@@ -352,7 +391,7 @@ function EntryEditor({ entry, onClose }: { entry: JournalEntry | null; onClose: 
               onClick={() => setMood(mood === k ? null : k)}
               className={cn(
                 "flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border transition-all cursor-pointer active:scale-95",
-                mood === k ? "border-linestrong bg-line/60" : "border-line hover:bg-line/40"
+                mood === k ? "border-line-strong bg-line/60" : "border-line hover:bg-line/40",
               )}
             >
               <m.icon className={cn("h-[17px] w-[17px]", mood === k ? m.color : "text-faint")} />
@@ -361,9 +400,15 @@ function EntryEditor({ entry, onClose }: { entry: JournalEntry | null; onClose: 
           ))}
         </div>
       </Field>
-      {error && <p className="text-[12.5px] text-down">{error}</p>}
+      {error && (
+        <p className="text-[12.5px] text-down" role="alert">
+          {error}
+        </p>
+      )}
       <div className="flex justify-end gap-2.5">
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
         <Button onClick={submit} loading={pending}>
           <Feather className="h-4 w-4" /> {entry ? "Save changes" : "Save entry"}
         </Button>
@@ -374,7 +419,15 @@ function EntryEditor({ entry, onClose }: { entry: JournalEntry | null; onClose: 
 
 export default function JournalPage() {
   return (
-    <Suspense fallback={<div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>}>
+    <Suspense
+      fallback={
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      }
+    >
       <JournalInner />
     </Suspense>
   );

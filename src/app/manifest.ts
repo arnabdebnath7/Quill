@@ -5,6 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Quill — Trading & Life Journal",
     short_name: "Quill",
     description: "A private trading and life journal with behavioural intelligence.",
+    id: "/",
     start_url: "/today",
     scope: "/",
     display: "standalone",
@@ -13,10 +14,9 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait-primary",
     icons: [
       { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-      { src: "/quill-icon.png", sizes: "any", type: "image/png", purpose: "any" },
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-      { src: "/quill-logo.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

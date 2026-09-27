@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import MemoPage from "./memo-page";
+import MimoPage from "./mimo-page";
 import { Mimo } from "@/components/mimo";
 
 export default function IntelligencePage() {
@@ -17,7 +17,7 @@ export default function IntelligencePage() {
           <div className="mt-1 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-brand">Mimo</div>
         </div>
       </div>
-      <MemoPage />
+      <MimoPage />
     </div>
   );
 }

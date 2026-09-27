@@ -1,3 +1,5 @@
+import { tradePnl } from "@/lib/utils";
+
 export type MarketKey = "us" | "india" | "forex" | "crypto" | "gold";
 
 export interface Instrument {
@@ -107,8 +109,46 @@ export function findInstrument(symbol: string, market?: string): Instrument | un
   return undefined;
 }
 
+export function isMarketKey(value: unknown): value is MarketKey {
+  return typeof value === "string" && value in MARKETS;
+}
+
 export function marketOf(market: string): MarketConfig {
-  return MARKETS[(market as MarketKey) in MARKETS ? (market as MarketKey) : "us"];
+  return MARKETS[isMarketKey(market) ? market : "us"];
+}
+
+/** Shape returned by `/api/market/quotes` for every requested `market:SYMBOL`. */
+export interface Quote {
+  symbol: string;
+  market: MarketKey;
+  name: string;
+  price: number;
+  /** % change versus the previous close (crypto: 24h). */
+  changePct: number;
+  currency: string;
+  /** false when the provider was unreachable and the price is an estimate. */
+  live: boolean;
+  ts: number;
+}
+
+export type QuotesMap = Record<string, Quote>;
+
+/** Fallback USD→INR rate when the live USDINR quote is unavailable. */
+export const FALLBACK_INR_PER_USD = 88.3;
+
+/** All P&L is reported in USD; INR-denominated markets are converted with the given rate. */
+export function toUsd(amount: number, currency: string, inrPerUsd: number): number {
+  return currency === "INR" ? amount / inrPerUsd : amount;
+}
+
+/** Realised (or marked) P&L of a trade converted to USD, or null when it cannot be computed. */
+export function tradePnlUsd(
+  t: { market: string; side: string; quantity: string | number; entryPrice: string | number; exitPrice?: string | number | null; fees?: string | number | null },
+  inrPerUsd: number,
+  mark?: number,
+): number | null {
+  const pnl = tradePnl(t, mark);
+  return pnl == null ? null : toUsd(pnl, marketOf(t.market).currency, inrPerUsd);
 }
 
 export function decimalsFor(symbol: string, market?: string): number {

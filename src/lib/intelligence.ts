@@ -1,4 +1,6 @@
 import type { DailyCheckin, JournalEntry, Trade } from "@/db/schema";
+import { FALLBACK_INR_PER_USD, tradePnlUsd } from "@/lib/markets";
+import { hasReadinessInputs, READINESS_THRESHOLDS, readinessLabel, readinessScore } from "@/lib/readiness";
 
 type SignalTone = "positive" | "caution" | "neutral";
 type EvidenceStrength = "insufficient" | "emerging" | "useful";
@@ -46,13 +48,6 @@ export type IntelligenceResult = {
   nextActions: string[];
 };
 
-function pnlOfTrade(trade: Trade) {
-  if (!trade.exitPrice) return null;
-  const qty = Number(trade.quantity), entry = Number(trade.entryPrice), exit = Number(trade.exitPrice), fees = Number(trade.fees ?? 0);
-  if (![qty, entry, exit, fees].every(Number.isFinite)) return null;
-  return (trade.side === "short" ? entry - exit : exit - entry) * qty - fees;
-}
-
 function average(values: number[]) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
@@ -66,13 +61,39 @@ function asDate(value: Date | string | number) {
   return Number.isFinite(date.getTime()) ? date : null;
 }
 
-function localDateKey(value: Date | string | number) {
-  const date = asDate(value);
-  if (!date) return null;
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * Calendar date + weekday of a timestamp in the *user's* timezone. The API runs
+ * in UTC, so without this a 02:00 IST trade would be filed under the previous day
+ * and never match that day's check-in.
+ */
+function makeCalendar(timeZone: string | undefined) {
+  let formatter: Intl.DateTimeFormat | null = null;
+  try {
+    formatter = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" });
+  } catch {
+    formatter = null;
+  }
+  const shortDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return {
+    dateKey(value: Date | string | number): string | null {
+      const date = asDate(value);
+      if (!date) return null;
+      if (!formatter) return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const parts = formatter.formatToParts(date);
+      const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+      return `${get("year")}-${get("month")}-${get("day")}`;
+    },
+    weekday(value: Date | string | number): number | null {
+      const date = asDate(value);
+      if (!date) return null;
+      if (!formatter) return date.getDay();
+      const name = formatter.formatToParts(date).find((p) => p.type === "weekday")?.value ?? "";
+      const index = shortDays.indexOf(name);
+      return index === -1 ? date.getDay() : index;
+    },
+  };
 }
 
 function readinessFromCheckin(checkin: DailyCheckin | null) {
@@ -80,9 +101,8 @@ function readinessFromCheckin(checkin: DailyCheckin | null) {
   const energy = checkin.energy ?? null;
   const focus = checkin.focus ?? null;
   const sleepHours = checkin.sleepHours == null ? null : Number(checkin.sleepHours);
-  const parts = [energy, focus, sleepHours == null ? null : Math.min(8, Math.max(0, sleepHours)) * 12.5].filter((v): v is number => v != null);
-  const score = parts.length ? Math.round(average(parts) ?? 0) : null;
-  const label = score == null ? "Checked in" : score >= 80 ? "High readiness" : score >= 60 ? "Steady readiness" : score >= 40 ? "Caution" : "Protect capital";
+  const score = hasReadinessInputs(checkin) ? readinessScore(checkin) : null;
+  const label = score == null ? "Checked in" : readinessLabel(score);
   return { score, label, mood: checkin.mood, energy, focus, sleepHours };
 }
 
@@ -96,20 +116,14 @@ function correlationId(label: string) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-function pointForTrade(trade: Trade, detail: string, value: string): IntelligenceEvidencePoint {
-  return {
-    id: trade.id,
-    label: trade.symbol,
-    value,
-    detail,
-    date: localDateKey(trade.entryAt) ?? "unknown",
-  };
+function pointForTrade(trade: Trade, detail: string, value: string, date: string | null): IntelligenceEvidencePoint {
+  return { id: trade.id, label: trade.symbol, value, detail, date: date ?? "unknown" };
 }
 
 function splitMetricEvidence(
   label: string,
   metricLabel: string,
-  rows: Array<{ metric: number; pnl: number; trade: Trade }>,
+  rows: Array<{ metric: number; pnl: number; trade: Trade; date: string | null }>,
 ): IntelligenceCorrelation | null {
   if (rows.length < 8) return null;
   const sorted = [...rows].sort((a, b) => a.metric - b.metric);
@@ -130,12 +144,12 @@ function splitMetricEvidence(
     .slice()
     .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
     .slice(0, 4)
-    .map((row) => pointForTrade(row.trade, `${metricLabel}: ${row.metric.toFixed(1)} · P&L ${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`, row.metric.toFixed(1)));
+    .map((row) => pointForTrade(row.trade, `${metricLabel}: ${row.metric.toFixed(1)} · P&L ${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`, row.metric.toFixed(1), row.date));
   const lowPoints = [...(highAvg >= lowAvg ? low : high)]
     .slice()
     .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
     .slice(0, 4)
-    .map((row) => pointForTrade(row.trade, `${metricLabel}: ${row.metric.toFixed(1)} · P&L ${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`, row.metric.toFixed(1)));
+    .map((row) => pointForTrade(row.trade, `${metricLabel}: ${row.metric.toFixed(1)} · P&L ${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`, row.metric.toFixed(1), row.date));
 
   return {
     id: correlationId(label),
@@ -179,15 +193,28 @@ function setupEvidence(closed: Array<{ trade: Trade; pnl: number }>): Intelligen
     });
 }
 
-export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheckin[]; journals: JournalEntry[] }): IntelligenceResult {
+export type IntelligenceInput = {
+  trades: Trade[];
+  checkins: DailyCheckin[];
+  journals: JournalEntry[];
+  /** IANA timezone of the user, e.g. "Asia/Kolkata". Defaults to UTC. */
+  timeZone?: string;
+  /** USD→INR rate used to normalise INR trades. */
+  inrPerUsd?: number;
+};
+
+export function buildIntelligence(input: IntelligenceInput): IntelligenceResult {
   const now = new Date();
+  const calendar = makeCalendar(input.timeZone);
+  const inrPerUsd = input.inrPerUsd && Number.isFinite(input.inrPerUsd) ? input.inrPerUsd : FALLBACK_INR_PER_USD;
   const recentCutoff = new Date(now);
   recentCutoff.setDate(recentCutoff.getDate() - 7);
   const prevCutoff = new Date(now);
   prevCutoff.setDate(prevCutoff.getDate() - 14);
   const closed = input.trades
-    .map((trade) => ({ trade, pnl: pnlOfTrade(trade) }))
-    .filter((x): x is { trade: Trade; pnl: number } => x.pnl != null && x.trade.status === "closed");
+    .filter((trade) => trade.status === "closed" && trade.exitPrice != null)
+    .map((trade) => ({ trade, pnl: tradePnlUsd(trade, inrPerUsd), date: calendar.dateKey(trade.entryAt) }))
+    .filter((x): x is { trade: Trade; pnl: number; date: string | null } => x.pnl != null);
   const recent = closed.filter(({ trade }) => {
     const date = asDate(trade.exitAt ?? trade.entryAt);
     return date ? date >= recentCutoff : false;
@@ -204,10 +231,9 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
   const readiness = readinessFromCheckin(latestCheckin);
 
   const checkinsByDate = new Map(input.checkins.map((checkin) => [checkin.date, checkin]));
-  const stateRows = closed.flatMap(({ trade, pnl }) => {
-    const key = localDateKey(trade.entryAt);
-    const checkin = key ? checkinsByDate.get(key) : undefined;
-    return checkin ? [{ checkin, pnl, trade }] : [];
+  const stateRows = closed.flatMap(({ trade, pnl, date }) => {
+    const checkin = date ? checkinsByDate.get(date) : undefined;
+    return checkin ? [{ checkin, pnl, trade, date }] : [];
   });
 
   const correlations: IntelligenceCorrelation[] = [];
@@ -215,30 +241,29 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
     if (value && value.strength !== "insufficient") correlations.push(value);
   };
 
-  pushCorrelation(splitMetricEvidence("Sleep × performance", "Sleep hours", stateRows.flatMap(({ checkin, pnl, trade }) => {
+  pushCorrelation(splitMetricEvidence("Sleep × performance", "Sleep hours", stateRows.flatMap(({ checkin, pnl, trade, date }) => {
     const metric = checkin.sleepHours == null ? null : Number(checkin.sleepHours);
-    return metric != null && Number.isFinite(metric) ? [{ metric, pnl, trade }] : [];
+    return metric != null && Number.isFinite(metric) ? [{ metric, pnl, trade, date }] : [];
   })));
-  pushCorrelation(splitMetricEvidence("Energy × performance", "Energy", stateRows.flatMap(({ checkin, pnl, trade }) => checkin.energy == null ? [] : [{ metric: checkin.energy, pnl, trade }])));
-  pushCorrelation(splitMetricEvidence("Focus × performance", "Focus", stateRows.flatMap(({ checkin, pnl, trade }) => checkin.focus == null ? [] : [{ metric: checkin.focus, pnl, trade }])));
+  pushCorrelation(splitMetricEvidence("Energy × performance", "Energy", stateRows.flatMap(({ checkin, pnl, trade, date }) => checkin.energy == null ? [] : [{ metric: checkin.energy, pnl, trade, date }])));
+  pushCorrelation(splitMetricEvidence("Focus × performance", "Focus", stateRows.flatMap(({ checkin, pnl, trade, date }) => checkin.focus == null ? [] : [{ metric: checkin.focus, pnl, trade, date }])));
 
-  const ratingRows = closed.flatMap(({ trade, pnl }) => trade.rating == null ? [] : [{ metric: trade.rating, pnl, trade }]);
+  const ratingRows = closed.flatMap(({ trade, pnl, date }) => trade.rating == null ? [] : [{ metric: trade.rating, pnl, trade, date }]);
   pushCorrelation(splitMetricEvidence("Trade rating × outcome", "Trade rating", ratingRows));
 
-  const weekday = new Map<number, { pnl: number; count: number; trades: Trade[] }>();
-  for (const { trade, pnl } of closed) {
-    const date = asDate(trade.entryAt);
-    if (!date) continue;
-    const day = date.getDay();
+  const weekday = new Map<number, { pnl: number; count: number; trades: Array<{ trade: Trade; date: string | null }> }>();
+  for (const { trade, pnl, date } of closed) {
+    const day = calendar.weekday(trade.entryAt);
+    if (day == null) continue;
     const row = weekday.get(day) ?? { pnl: 0, count: 0, trades: [] };
     row.pnl += pnl;
     row.count += 1;
-    row.trades.push(trade);
+    row.trades.push({ trade, date });
     weekday.set(day, row);
   }
   const bestWeekday = [...weekday.entries()].filter(([, v]) => v.count >= 3).sort((a, b) => b[1].pnl / b[1].count - a[1].pnl / a[1].count)[0];
   if (bestWeekday) {
-    const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const names = WEEKDAYS;
     const avg = bestWeekday[1].pnl / bestWeekday[1].count;
     correlations.push({
       id: "day-of-week",
@@ -252,20 +277,17 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
       strength: evidenceStrength(bestWeekday[1].count),
       evidence: bestWeekday[1].trades
         .slice()
-        .sort((a, b) => String(a.entryAt).localeCompare(String(b.entryAt)))
+        .sort((a, b) => new Date(a.trade.entryAt).getTime() - new Date(b.trade.entryAt).getTime())
         .slice(0, 6)
-        .map((trade) => pointForTrade(trade, "Trade contributing to this weekday sample", localDateKey(trade.entryAt) ?? "unknown")),
+        .map(({ trade, date }) => pointForTrade(trade, "Trade contributing to this weekday sample", date ?? "unknown", date)),
     });
   }
 
   const lowReadinessDates = new Set(input.checkins.filter((c) => {
     const score = readinessFromCheckin(c).score;
-    return score != null && score < 50;
+    return score != null && score < READINESS_THRESHOLDS.protect;
   }).map((c) => c.date));
-  const lowReadinessTrades = closed.filter(({ trade }) => {
-    const key = localDateKey(trade.entryAt);
-    return key ? lowReadinessDates.has(key) : false;
-  });
+  const lowReadinessTrades = closed.filter(({ date }) => (date ? lowReadinessDates.has(date) : false));
   const lowReadinessLossRate = lowReadinessTrades.length
     ? (lowReadinessTrades.filter((x) => x.pnl <= 0).length / lowReadinessTrades.length) * 100
     : null;
@@ -291,7 +313,7 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
     label: "Today's state",
     value: `${readiness.score}/100`,
     detail: `${readiness.label}${readiness.mood ? ` · ${readiness.mood}` : ""}`,
-    tone: readiness.score >= 60 ? "positive" : "caution",
+    tone: readiness.score >= READINESS_THRESHOLDS.protect ? "positive" : "caution",
   });
   if (recent.length >= 3 && previous.length >= 3) observations.push({
     label: "Week over week",
@@ -348,10 +370,10 @@ export function buildIntelligence(input: { trades: Trade[]; checkins: DailyCheck
   });
 
   const nextActions: string[] = [];
-  if (readiness.score != null && readiness.score < 60) nextActions.push("Run the Today check-in before opening a new position.");
+  if (readiness.score != null && readiness.score < READINESS_THRESHOLDS.protect) nextActions.push("Run the Today check-in before opening a new position.");
   if (ruleBreaks.length >= 2) nextActions.push("Review the last rule-break trades and write one concrete prevention rule.");
   if (correlations[0] && correlations[0].tone === "caution") nextActions.push(`Review whether the ${correlations[0].label.toLowerCase()} pattern justifies a process change before changing your strategy.`);
-  if (!nextActions.length) nextActions.push("Keep logging pre-trade plans, state and post-trade reviews; Quill gets sharper as the evidence grows.");
+  if (!nextActions.length) nextActions.push("Keep logging pre-trade plans, state and post-trade reviews; Mimo gets sharper as the evidence grows.");
 
   const confidence: IntelligenceResult["confidence"] = closed.length >= 30 && input.checkins.length >= 14
     ? "strong"
