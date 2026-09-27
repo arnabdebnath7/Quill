@@ -55,8 +55,11 @@ function friendlyPhoneError(e: unknown) {
       case "auth/code-expired":
         return "That verification code has expired. Enter the latest code.";
       case "auth/too-many-requests":
-      case "auth/quota-exceeded":
         return "Too many verification attempts. Please wait a while and try again.";
+      case "auth/quota-exceeded":
+        return "Firebase has temporarily throttled phone verification. Wait a while and try again, or use a Firebase test phone number while developing.";
+      case "auth/billing-not-enabled":
+        return "Real SMS OTP is disabled for this Firebase project because Cloud Billing is not linked. Link a billing account / move the project to Blaze, then retry.";
       case "auth/unauthorized-domain":
       case "auth/app-not-authorized": {
         const host = typeof window !== "undefined" ? window.location.hostname : "this domain";
@@ -67,7 +70,7 @@ function friendlyPhoneError(e: unknown) {
       case "auth/operation-not-allowed":
         return "Phone sign-in is disabled — enable it in Firebase Console → Authentication → Sign-in method.";
       case "auth/internal-error":
-        return "Firebase could not start phone verification. Check that the project has a Cloud Billing account and that India (+91) is allowed in the SMS region policy.";
+        return "Firebase could not start phone verification. Check that Cloud Billing is linked and that India (+91) is allowed in the SMS region policy.";
       case "auth/invalid-app-credential":
         return "Firebase rejected the phone verification security credential. Check the authorized hostname and phone-auth security settings, then retry.";
       case "auth/network-request-failed":
