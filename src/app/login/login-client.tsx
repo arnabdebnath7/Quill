@@ -57,14 +57,19 @@ function friendlyPhoneError(e: unknown) {
       case "auth/too-many-requests":
       case "auth/quota-exceeded":
         return "Too many verification attempts. Please wait a while and try again.";
+      case "auth/unauthorized-domain":
+      case "auth/app-not-authorized": {
+        const host = typeof window !== "undefined" ? window.location.hostname : "this domain";
+        return `Phone sign-in is blocked for ${host}. Add that hostname under Firebase Console → Authentication → Settings → Authorized domains.`;
+      }
       case "auth/captcha-check-failed":
-        return "Phone verification could not be completed. Please try again.";
+        return "Phone verification could not be completed. Please retry so Firebase can run the security check again.";
       case "auth/operation-not-allowed":
-        return "Phone sign-in is disabled — enable it in Firebase Console → Auth → Sign-in method.";
+        return "Phone sign-in is disabled — enable it in Firebase Console → Authentication → Sign-in method.";
       case "auth/internal-error":
-        return "Firebase could not start phone verification. Check the SMS region policy and billing/phone-auth quota for this project.";
+        return "Firebase could not start phone verification. Check that the project has a Cloud Billing account and that India (+91) is allowed in the SMS region policy.";
       case "auth/invalid-app-credential":
-        return "Phone verification security check failed. Please retry.";
+        return "Firebase rejected the phone verification security credential. Check the authorized hostname and phone-auth security settings, then retry.";
       case "auth/network-request-failed":
         return "Network hiccup reaching phone verification. Check your connection and retry.";
       default:
