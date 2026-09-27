@@ -4,15 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { animate, motion, useInView } from "framer-motion";
 
 /* Animated number that tweens between values */
-export function AnimatedNumber({
-  value,
-  format,
-  className,
-}: {
-  value: number;
-  format?: (n: number) => string;
-  className?: string;
-}) {
+export function AnimatedNumber({ value, format, className }: { value: number; format?: (n: number) => string; className?: string }) {
   const [display, setDisplay] = useState(value);
   const prev = useRef(value);
   useEffect(() => {
@@ -161,30 +153,25 @@ export function AreaChart({
 }
 
 /* ---------------- Donut ---------------- */
-export function Donut({
-  parts,
-  size = 150,
-  thickness = 16,
-}: {
-  parts: { label: string; value: number; color: string }[];
-  size?: number;
-  thickness?: number;
-}) {
+export function Donut({ parts, size = 150, thickness = 16 }: { parts: { label: string; value: number; color: string }[]; size?: number; thickness?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
   const total = parts.reduce((s, p) => s + p.value, 0) || 1;
   const R = (size - thickness) / 2;
   const C = 2 * Math.PI * R;
-  let acc = 0;
+  // Pre-compute each slice's start fraction so render stays free of mutation.
+  const slices = parts.reduce<{ part: (typeof parts)[number]; start: number; frac: number }[]>((list, part) => {
+    const start = list.length ? list[list.length - 1].start + list[list.length - 1].frac : 0;
+    list.push({ part, start, frac: part.value / total });
+    return list;
+  }, []);
 
   return (
     <div ref={ref} className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        {parts.map((p) => {
-          const frac = p.value / total;
+        {slices.map(({ part: p, start, frac }) => {
           const dash = frac * C;
-          const offset = -acc * C;
-          acc += frac;
+          const offset = -start * C;
           return (
             <motion.circle
               key={p.label}
@@ -212,13 +199,7 @@ export function Donut({
 }
 
 /* ---------------- Horizontal bars ---------------- */
-export function HBars({
-  data,
-  format,
-}: {
-  data: { label: string; value: number }[];
-  format?: (v: number) => string;
-}) {
+export function HBars({ data, format }: { data: { label: string; value: number }[]; format?: (v: number) => string }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-20px" });
   const maxAbs = Math.max(...data.map((d) => Math.abs(d.value)), 1);
@@ -266,13 +247,7 @@ export function Sparkline({ points, width = 96, height = 28, up }: { points: num
   const isUp = up ?? (points[points.length - 1] ?? 0) >= (points[0] ?? 0);
   return (
     <svg width={width} height={height} className="overflow-visible">
-      <path
-        d={nicePath(pts)}
-        fill="none"
-        stroke={isUp ? "var(--up)" : "var(--down)"}
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
+      <path d={nicePath(pts)} fill="none" stroke={isUp ? "var(--up)" : "var(--down)"} strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }

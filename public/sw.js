@@ -1,1 +1,41 @@
-const CACHE='quill-shell-v1';const SHELL=['/','/login','/manifest.webmanifest','/icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==self.location.origin)return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request).then(r=>r||caches.match('/login'))))});
+/* Quill service worker — offline fallback only.
+ * Bump VERSION whenever the precached files change so old caches are dropped on activate. */
+const VERSION = "quill-v2";
+const OFFLINE_URL = "/offline.html";
+const PRECACHE = [OFFLINE_URL, "/quill-logo.svg", "/icon.svg"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(VERSION)
+      .then((cache) => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== VERSION).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  // Never intercept API calls or Next.js internals — they must always be fresh.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/")) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+    return;
+  }
+
+  if (PRECACHE.includes(url.pathname)) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  }
+});

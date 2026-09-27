@@ -1,51 +1,58 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { journalEntries } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { dateOnly, isValidUuid, MOOD_KEYS, notFound, parseBody, serverError, unauthorized } from "@/lib/api";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const patchSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
   content: z.string().max(20000).optional(),
-  mood: z.enum(["great", "good", "neutral", "low", "rough"]).optional().nullable(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  tags: z.array(z.string().max(30)).max(12).optional(),
+  mood: z.enum(MOOD_KEYS).nullable().optional(),
+  date: dateOnly.optional(),
+  tags: z.array(z.string().trim().min(1).max(30)).max(12).optional(),
   pinned: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
   const { id } = await ctx.params;
+  if (!isValidUuid(id)) return notFound("Entry not found");
 
-  let body: z.infer<typeof patchSchema>;
+  const parsed = await parseBody(req, patchSchema, "Invalid update");
+  if ("response" in parsed) return parsed.response;
+
   try {
-    body = patchSchema.parse(await req.json());
-  } catch (e) {
-    return NextResponse.json({ error: "Invalid update", details: String(e) }, { status: 400 });
+    const [row] = await db
+      .update(journalEntries)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(and(eq(journalEntries.id, id), eq(journalEntries.userId, user.id)))
+      .returning();
+    if (!row) return notFound("Entry not found");
+    return NextResponse.json({ entry: row });
+  } catch (error) {
+    return serverError("journal.update", error);
   }
-
-  const [row] = await db
-    .update(journalEntries)
-    .set({ ...body, updatedAt: new Date() })
-    .where(and(eq(journalEntries.id, id), eq(journalEntries.userId, user.id)))
-    .returning();
-  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ entry: row });
 }
 
 export async function DELETE(_req: Request, ctx: Ctx) {
   const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
   const { id } = await ctx.params;
+  if (!isValidUuid(id)) return notFound("Entry not found");
 
-  const [row] = await db
-    .delete(journalEntries)
-    .where(and(eq(journalEntries.id, id), eq(journalEntries.userId, user.id)))
-    .returning({ id: journalEntries.id });
-  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ ok: true, id: row.id });
+  try {
+    const [row] = await db
+      .delete(journalEntries)
+      .where(and(eq(journalEntries.id, id), eq(journalEntries.userId, user.id)))
+      .returning({ id: journalEntries.id });
+    if (!row) return notFound("Entry not found");
+    return NextResponse.json({ ok: true, id: row.id });
+  } catch (error) {
+    return serverError("journal.delete", error);
+  }
 }

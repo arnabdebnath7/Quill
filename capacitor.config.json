@@ -1,7 +1,7 @@
 {
   "appId": "app.quilljournal.quill",
   "appName": "Quill",
-  "webDir": "out",
+  "webDir": "public",
   "server": {
     "url": "https://quill-nine.vercel.app",
     "cleartext": false

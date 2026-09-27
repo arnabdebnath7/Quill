@@ -1,48 +1,25 @@
-"use client";
-
 import { getApp, getApps, initializeApp, FirebaseError } from "firebase/app";
 import {
   getAuth,
-  getRedirectResult,
   GoogleAuthProvider,
-  OAuthProvider,
   RecaptchaVerifier,
-  signInWithPhoneNumber as firebaseSignInWithPhoneNumber,
-  setPersistence,
-  browserLocalPersistence,
+  signInWithPhoneNumber,
   signInWithPopup,
-  signInWithRedirect,
+  signOut,
+  type ConfirmationResult,
 } from "firebase/auth";
-
-// Firebase web config is public by design — security lives in Firebase
-// Auth rules + server-side ID-token verification, not in hiding these values.
-const firebaseConfig = {
-  apiKey: "AIzaSyBN51FLSMLwU9jr5WFy2zS3dXIRS0bSzmc",
-  authDomain: "parallel-979e8.firebaseapp.com",
-  projectId: "parallel-979e8",
-  storageBucket: "parallel-979e8.firebasestorage.app",
-  messagingSenderId: "818522675776",
-  appId: "1:818522675776:web:34179d2bff5ee212da1da5",
-  measurementId: "G-JD54J9D1M8",
-};
+import { firebaseConfig } from "@/lib/firebase-config";
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+// Firebase remembers the signed-in user in IndexedDB. We only need the ID
+// token for one server exchange, so the language of reCAPTCHA / SMS should
+// follow the browser and nothing else needs configuring.
+auth.useDeviceLanguage();
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
-
-const appleProvider = new OAuthProvider("apple.com");
-appleProvider.addScope("email");
-appleProvider.addScope("name");
-
-// Analytics only where it can actually run.
-if (typeof window !== "undefined") {
-  import("firebase/analytics")
-    .then(({ getAnalytics, isSupported }) => isSupported().then((ok) => ok && getAnalytics(app)))
-    .catch(() => {});
-}
 
 export class SignInCancelled extends Error {
   constructor() {
@@ -51,64 +28,62 @@ export class SignInCancelled extends Error {
   }
 }
 
-async function signInWithProvider(provider: GoogleAuthProvider | OAuthProvider): Promise<string> {
+export function isFirebaseError(error: unknown): error is FirebaseError {
+  return error instanceof FirebaseError || (typeof error === "object" && error !== null && typeof (error as { code?: unknown }).code === "string" && String((error as { code: string }).code).startsWith("auth/"));
+}
+
+/** Starts Google sign-in in a popup. Resolves with a Firebase ID token for the server exchange. */
+export async function signInWithGoogle(): Promise<string> {
   try {
-    const res = await signInWithPopup(auth, provider);
-    return await res.user.getIdToken();
-  } catch (e) {
-    if (e instanceof FirebaseError) {
-      if (
-        e.code === "auth/popup-blocked" ||
-        e.code === "auth/cancelled-popup-request" ||
-        e.code === "auth/operation-not-supported-in-this-environment" ||
-        e.code === "auth/web-storage-unsupported"
-      ) {
-        await signInWithRedirect(auth, provider);
-        return new Promise<string>(() => {});
-      }
-      if (e.code === "auth/popup-closed-by-user") throw new SignInCancelled();
+    const result = await signInWithPopup(auth, googleProvider);
+    return await result.user.getIdToken();
+  } catch (error) {
+    if (isFirebaseError(error) && (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request")) {
+      throw new SignInCancelled();
     }
-    throw e;
+    throw error;
   }
 }
 
-/** Starts Google sign-in. Returns a Firebase ID token for the server exchange. */
-export function signInWithGoogle(): Promise<string> {
-  return signInWithProvider(googleProvider);
-}
-
-/** Starts Apple sign-in. Returns a Firebase ID token for the server exchange. */
-export function signInWithApple(): Promise<string> {
-  return signInWithProvider(appleProvider);
-}
-
 /**
- * Creates Firebase's standard invisible reCAPTCHA verifier.
+ * Phone sign-in step 1: sends the SMS code.
  *
- * Do not call initializeRecaptchaConfig() here: that is the project-level
- * reCAPTCHA Enterprise configuration path and is optional for the classic
- * Firebase Phone Auth flow. Calling it can fail with "recaptcha key
- * undefined" on projects that have not configured Enterprise.
+ * Firebase's invisible reCAPTCHA renders into a DOM element and refuses to
+ * render twice into the same element ("reCAPTCHA has already been rendered").
+ * Because the widget renders *before* Firebase talks to its backend, any
+ * failure (bad number, quota, billing) used to poison every retry until the
+ * page was reloaded. We therefore mount a brand-new child element inside the
+ * host for every attempt and tear it down afterwards.
  */
-export function createPhoneRecaptchaVerifier(
-  buttonId: string
-): RecaptchaVerifier {
-  return new RecaptchaVerifier(auth, buttonId, {
-    size: "invisible",
-    callback: () => {},
-    "expired-callback": () => {},
-  });
+export async function sendPhoneCode(host: HTMLElement, phoneE164: string): Promise<ConfirmationResult> {
+  const container = document.createElement("div");
+  container.className = "quill-recaptcha";
+  host.appendChild(container);
+  const verifier = new RecaptchaVerifier(auth, container, { size: "invisible" });
+  try {
+    await verifier.render();
+    return await signInWithPhoneNumber(auth, phoneE164, verifier);
+  } finally {
+    try {
+      verifier.clear();
+    } catch {
+      // Already disposed — nothing to do.
+    }
+    container.remove();
+  }
 }
 
-export function sendPhoneVerificationCode(
-  phoneNumber: string,
-  appVerifier: RecaptchaVerifier
-) {
-  return firebaseSignInWithPhoneNumber(auth, phoneNumber, appVerifier);
+/** Phone sign-in step 2: confirms the code and returns the Firebase ID token. */
+export async function confirmPhoneCode(confirmation: ConfirmationResult, code: string): Promise<string> {
+  const credential = await confirmation.confirm(code);
+  return credential.user.getIdToken();
 }
 
-export async function consumeRedirectResult(): Promise<string | null> {
-  const res = await getRedirectResult(auth);
-  if (!res) return null;
-  return res.user.getIdToken();
+/** Drops the Firebase-side session so the next visit to /login starts clean. */
+export async function signOutFirebase() {
+  try {
+    await signOut(auth);
+  } catch {
+    // Ignore — the server session is already gone, and Firebase state is only a convenience.
+  }
 }

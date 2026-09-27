@@ -1,63 +1,63 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { db } from "@/db";
 import { journalEntries } from "@/db/schema";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { dateOnly, likePattern, MOOD_KEYS, parseBody, serverError, unauthorized } from "@/lib/api";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const url = new URL(req.url);
-  const q = url.searchParams.get("q");
+  const q = url.searchParams.get("q")?.trim().slice(0, 80);
   const mood = url.searchParams.get("mood");
 
   const conds = [eq(journalEntries.userId, user.id)];
   if (mood && mood !== "all") conds.push(eq(journalEntries.mood, mood));
   if (q) {
-    conds.push(or(ilike(journalEntries.title, `%${q}%`), ilike(journalEntries.content, `%${q}%`))!);
+    const pattern = likePattern(q);
+    conds.push(or(ilike(journalEntries.title, pattern), ilike(journalEntries.content, pattern))!);
   }
 
-  const rows = await db
-    .select()
-    .from(journalEntries)
-    .where(and(...conds))
-    .orderBy(desc(journalEntries.pinned), desc(journalEntries.date), desc(journalEntries.createdAt));
-  return NextResponse.json({ entries: rows });
+  try {
+    const rows = await db
+      .select()
+      .from(journalEntries)
+      .where(and(...conds))
+      .orderBy(desc(journalEntries.pinned), desc(journalEntries.date), desc(journalEntries.createdAt));
+    return NextResponse.json({ entries: rows });
+  } catch (error) {
+    return serverError("journal.list", error);
+  }
 }
 
 const createSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   content: z.string().max(20000).default(""),
-  mood: z.enum(["great", "good", "neutral", "low", "rough"]).optional().nullable(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  tags: z.array(z.string().max(30)).max(12).default([]),
+  mood: z.enum(MOOD_KEYS).nullable().optional(),
+  date: dateOnly,
+  tags: z.array(z.string().trim().min(1).max(30)).max(12).default([]),
   pinned: z.boolean().default(false),
 });
 
 export async function POST(req: Request) {
   const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
+  const parsed = await parseBody(req, createSchema, "Invalid entry");
+  if ("response" in parsed) return parsed.response;
+  const body = parsed.data;
 
-  let body: z.infer<typeof createSchema>;
   try {
-    body = createSchema.parse(await req.json());
-  } catch (e) {
-    return NextResponse.json({ error: "Invalid entry", details: String(e) }, { status: 400 });
+    const [row] = await db
+      .insert(journalEntries)
+      .values({ userId: user.id, title: body.title, content: body.content, mood: body.mood ?? null, date: body.date, tags: body.tags, pinned: body.pinned })
+      .returning();
+    return NextResponse.json({ entry: row }, { status: 201 });
+  } catch (error) {
+    return serverError("journal.create", error);
   }
-
-  const [row] = await db
-    .insert(journalEntries)
-    .values({
-      userId: user.id,
-      title: body.title,
-      content: body.content,
-      mood: body.mood ?? null,
-      date: body.date,
-      tags: body.tags,
-      pinned: body.pinned,
-    })
-    .returning();
-  return NextResponse.json({ entry: row }, { status: 201 });
 }

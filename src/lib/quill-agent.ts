@@ -10,9 +10,9 @@ const CoachOutput = z.object({
   safetyNote: z.string().min(1).max(220),
 });
 
-export type QuillCoachOutput = z.infer<typeof CoachOutput>;
+export type MimoCoachOutput = z.infer<typeof CoachOutput>;
 
-const SYSTEM_INSTRUCTIONS = `You are Memo, the private AI companion inside Quill.
+const SYSTEM_INSTRUCTIONS = `You are Mimo, the private AI companion inside Quill.
 
 Your job is to help the user understand their own recorded trading behaviour. You receive a deterministic evidence packet prepared by Quill and must treat it as the source of truth.
 
@@ -30,7 +30,7 @@ Rules:
 Return structured output only.`;
 
 const agent = new Agent({
-  name: "Memo",
+  name: "Mimo",
   instructions: SYSTEM_INSTRUCTIONS,
   outputType: CoachOutput,
 });
@@ -68,10 +68,9 @@ const FORECAST_PATTERNS = [
   /\bsell\b.*\bstock\b/i,
   /\bhold\b.*\bstock\b/i,
   /\bguarantee[sd]?\b/i,
-  /\bguaranteed\b/i,
 ];
 
-function validateRelease(output: QuillCoachOutput, intelligence: IntelligenceResult) {
+function validateRelease(output: MimoCoachOutput, intelligence: IntelligenceResult) {
   const allowedIds = new Set(
     intelligence.correlations.flatMap((correlation) =>
       correlation.evidence.map((point) => point.id),
@@ -89,46 +88,27 @@ function validateRelease(output: QuillCoachOutput, intelligence: IntelligenceRes
   return {
     ...output,
     safetyNote: output.safetyNote || "Observed evidence only; this is not a forecast or trade recommendation.",
-  } satisfies QuillCoachOutput;
+  } satisfies MimoCoachOutput;
 }
 
-export async function runQuillCoach(intelligence: IntelligenceResult, question?: string) {
-  if (!process.env.OPENAI_API_KEY) {
-    return {
-      status: "disabled" as const,
-      reason: "OPENAI_API_KEY is not configured.",
-    };
-  }
+export type MimoCoachResult = { status: "ready"; output: MimoCoachOutput } | { status: "blocked"; reason: string };
 
+export async function runMimoCoach(intelligence: IntelligenceResult, question?: string): Promise<MimoCoachResult> {
   const userPrompt = `Analyze this Quill evidence packet.\n\n${JSON.stringify(compactPacket(intelligence))}\n\nUser conversation/question: ${question?.trim() || "What is the most useful thing to review right now?"}`;
 
   try {
     const result = await run(agent, userPrompt, { maxTurns: 2 });
     const parsed = CoachOutput.safeParse(result.finalOutput);
-
     if (!parsed.success) {
-      return {
-        status: "blocked" as const,
-        reason: "Memo returned a response that failed Quill's structured-output validation.",
-      };
+      return { status: "blocked", reason: "Mimo returned a response that failed Quill's structured-output validation." };
     }
-
     const released = validateRelease(parsed.data, intelligence);
     if (!released) {
-      return {
-        status: "blocked" as const,
-        reason: "Memo crossed Quill's evidence or safety boundary.",
-      };
+      return { status: "blocked", reason: "Mimo crossed Quill's evidence or safety boundary, so the answer was withheld." };
     }
-
-    return {
-      status: "ready" as const,
-      output: released,
-    };
-  } catch {
-    return {
-      status: "blocked" as const,
-      reason: "Memo was temporarily unavailable. The recorded evidence panels are still available.",
-    };
+    return { status: "ready", output: released };
+  } catch (error) {
+    console.error("[mimo] model call failed", error);
+    return { status: "blocked", reason: "Mimo was temporarily unavailable. The recorded evidence panels are still available." };
   }
 }

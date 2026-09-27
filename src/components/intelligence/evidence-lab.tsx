@@ -36,7 +36,8 @@ export default function EvidenceLab({ correlations }: Props) {
       <Card className="p-6">
         <div className="font-display text-[17px] font-semibold">Not enough paired evidence yet.</div>
         <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-sub">
-          Quill only publishes a relationship when enough trades can be paired with a recorded state. Keep completing Today check-ins and closing trades with consistent reviews.
+          Quill only publishes a relationship when enough trades can be paired with a recorded state. Keep completing Today check-ins and closing trades with
+          consistent reviews.
         </p>
       </Card>
     );
@@ -47,12 +48,7 @@ export default function EvidenceLab({ correlations }: Props) {
       {correlations.map((item, index) => {
         const open = openId === item.id;
         return (
-          <motion.div
-            key={`${item.id}-${item.headline}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.04 }}
-          >
+          <motion.div key={`${item.id}-${item.headline}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
             <Card className="h-full overflow-hidden">
               <button
                 type="button"
@@ -86,7 +82,9 @@ export default function EvidenceLab({ correlations }: Props) {
 
                 <div className="mt-4 flex items-center justify-between gap-3 text-[9px] font-semibold uppercase tracking-[0.1em] text-faint">
                   <span>{strengthCopy(item.strength)}</span>
-                  <span className={toneClass(item.tone)}>{item.tone === "positive" ? "supports review" : item.tone === "caution" ? "watch closely" : "neutral"}</span>
+                  <span className={toneClass(item.tone)}>
+                    {item.tone === "positive" ? "supports review" : item.tone === "caution" ? "watch closely" : "neutral"}
+                  </span>
                 </div>
 
                 <div className="mt-4 flex items-center justify-center gap-1 text-[10px] font-semibold text-sub">
@@ -112,7 +110,12 @@ export default function EvidenceLab({ correlations }: Props) {
                               <div className="text-[11px] font-semibold">{point.label}</div>
                               <div className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-faint">{point.date}</div>
                             </div>
-                            {pnl && <div className={cn("text-[11px] font-semibold", Number(pnl) >= 0 ? "text-up" : "text-down")}>{Number(pnl) >= 0 ? "+" : ""}{pnl}</div>}
+                            {pnl && (
+                              <div className={cn("text-[11px] font-semibold", Number(pnl) >= 0 ? "text-up" : "text-down")}>
+                                {Number(pnl) >= 0 ? "+" : ""}
+                                {pnl}
+                              </div>
+                            )}
                           </div>
                           <p className="mt-2 text-[10.5px] leading-relaxed text-sub">{point.detail}</p>
                         </div>

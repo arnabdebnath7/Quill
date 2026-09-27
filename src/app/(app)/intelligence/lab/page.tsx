@@ -2,21 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Brain } from "lucide-react";
-import type { IntelligenceResult } from "@/lib/intelligence";
+import { fetchIntelligence } from "@/lib/intelligence-client";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import EvidenceLab from "@/components/intelligence/evidence-lab";
 
-async function getIntelligence() {
-  const res = await fetch("/api/intelligence");
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-  return json.intelligence as IntelligenceResult;
-}
-
 export default function IntelligenceLabPage() {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["intelligence"],
-    queryFn: getIntelligence,
+    queryFn: fetchIntelligence,
     staleTime: 60_000,
   });
 
@@ -39,7 +32,7 @@ export default function IntelligenceLabPage() {
         icon={<Brain className="h-5 w-5" />}
         title="Evidence lab is unavailable"
         body="Quill couldn't load the evidence sample right now."
-        action={<Button onClick={() => window.location.reload()}>Try again</Button>}
+        action={<Button loading={isFetching} onClick={() => void refetch()}>Try again</Button>}
       />
     );
   }
